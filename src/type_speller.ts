@@ -48,9 +48,52 @@ export class TypeSpeller {
           case "hash64":
             return "u64";
           case "timestamp":
-            return "std::time::Instant";
+            return "std::time::SystemTime";
           case "bytes":
             return "std::vec::Vec<u8>";
+        }
+      }
+    }
+  }
+
+  getDefaultExpr(type: ResolvedType): string {
+    switch (type.kind) {
+      case "record": {
+        const rustType = this.getRustType(type);
+        const record = this.recordMap.get(type.key)!;
+        if (record.record.recordType === "enum") {
+          return `${rustType}::Unknown`;
+        } else {
+          return `${rustType}_default().clone()`;
+        }
+      }
+      case "array": {
+        return "std::vec::Vec::new()";
+      }
+      case "optional": {
+        return "std::option::Option::None";
+      }
+      case "primitive": {
+        const { primitive } = type;
+        switch (primitive) {
+          case "bool":
+            return "false";
+          case "int32":
+            return "0_i32";
+          case "int64":
+            return "0_i64";
+          case "float32":
+            return "0.0_f32";
+          case "float64":
+            return "0.0_f64";
+          case "string":
+            return "std::string::String::new()";
+          case "hash64":
+            return "0_u64";
+          case "timestamp":
+            return "std::time::SystemTime::UNIX_EPOCH";
+          case "bytes":
+            return "std::vec::Vec::new()";
         }
       }
     }

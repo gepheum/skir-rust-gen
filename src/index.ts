@@ -10,7 +10,7 @@ import {
   convertCase,
 } from "skir-internal";
 import { z } from "zod";
-import { getTypeName, structFieldToGetterName } from "./naming.js";
+import { getTypeName, lowerCasedNameToIdentifier } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
 
@@ -47,7 +47,7 @@ class RustSourceFileGenerator {
     recordMap: ReadonlyMap<RecordKey, RecordLocation>,
     private readonly config: Config,
   ) {
-    this.typeSpeller = new TypeSpeller(recordMap, moduleSpec.path);
+    this.typeSpeller = new TypeSpeller(recordMap, moduleSpec.skirModule?.path);
   }
 
   generate(): string {
@@ -55,7 +55,9 @@ class RustSourceFileGenerator {
 
     // http://patorjk.com/software/taag/#f=Doom&t=Do%20not%20edit
     this.push(
-      `//  ______                        _               _  _  _
+      `#![allow(nonstandard_style)]
+
+      //  ______                        _               _  _  _
       //  |  _  \\                      | |             | |(_)| |
       //  | | | |  ___    _ __    ___  | |_    ___   __| | _ | |_
       //  | | | | / _ \\  | '_ \\  / _ \\ | __|  / _ \\ / _\` || || __|
@@ -67,7 +69,6 @@ class RustSourceFileGenerator {
       //
       // To install the Skir client library, run:
       //   cargo add skir-rust-client
-
       `,
     );
 
@@ -124,18 +125,66 @@ class RustSourceFileGenerator {
 
   private writeStruct(struct: RecordLocation): void {
     const typeName = getTypeName(struct);
+    this.push(`#[derive(std::clone::Clone)]\n`);
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
-      const fieldName = field.name.text;
       const fieldType = this.typeSpeller.getRustType(field.type!);
-      this.push(`  pub ${fieldName}: ${fieldType},\n`);
+      if (field.isRecursive === "hard") {
+        const boxedType = `std::option::Option<std::boxed::Box<${fieldType}>>`;
+        this.push(`  pub _${field.name.text}: ${boxedType},\n`);
+      } else {
+        const fieldName = lowerCasedNameToIdentifier(field.name.text);
+        this.push(`  pub ${fieldName}: ${fieldType},\n`);
+      }
     }
+    this.push("}\n\n");
+
+    // Getters for hard-recursive fields
+    const hardRecursiveFields = struct.record.fields.filter(
+      (f) => f.isRecursive === "hard",
+    );
+    if (hardRecursiveFields.length > 0) {
+      this.push(`impl ${typeName} {\n`);
+      for (const field of hardRecursiveFields) {
+        const fieldName = lowerCasedNameToIdentifier(field.name.text);
+        const fieldType = this.typeSpeller.getRustType(field.type!);
+        this.push(`  pub fn ${fieldName}(&self) -> &${fieldType} {\n`);
+        this.push(`    match &self._${field.name.text} {\n`);
+        this.push(`      Some(boxed) => boxed.as_ref(),\n`);
+        this.push(`      None => ${fieldType}_default(),\n`);
+        this.push("    }\n");
+        this.push("  }\n");
+      }
+      this.push("}\n\n");
+    }
+
+    // Static default instance
+    this.push(
+      `static ${typeName}_DEFAULT: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(|| ${typeName} {\n`,
+    );
+    for (const field of struct.record.fields) {
+      if (field.isRecursive === "hard") {
+        this.push(`  _${field.name.text}: None,\n`);
+        continue;
+      } else {
+        const fieldName = lowerCasedNameToIdentifier(field.name.text);
+        const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
+        this.push(`  ${fieldName}: ${defaultExpr},\n`);
+      }
+    }
+    this.push("});\n\n");
+
+    // Default accessor function
+    this.push(`pub fn ${typeName}_default() -> &'static ${typeName} {\n`);
+    this.push(`  &${typeName}_DEFAULT\n`);
     this.push("}\n\n");
   }
 
   private writeEnum(record: RecordLocation): void {
     const typeName = getTypeName(record);
+    this.push(`#[derive(std::clone::Clone)]\n`);
     this.push(`pub enum ${typeName} {\n`);
+    this.push(`  Unknown,\n`);
     this.push("}\n\n");
   }
 
@@ -159,7 +208,7 @@ class RustSourceFileGenerator {
       );
     const keyAccessor = "e.".concat(
       key.path
-        .map((p) => structFieldToGetterName(p.name.text).concat("()"))
+        .map((p) => lowerCasedNameToIdentifier(p.name.text).concat("()"))
         .join("."),
     );
     const { typeSpeller } = this;

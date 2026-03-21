@@ -108,6 +108,11 @@ class RustSourceFileGenerator {
   }
 
   private writeStruct(struct: RecordLocation): void {
+    this.pushSeparator(
+      "struct ".concat(
+        struct.recordAncestors.map((r) => r.name.text).join("."),
+      ),
+    );
     const typeName = getTypeName(struct);
     this.push(
       `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,
@@ -172,6 +177,9 @@ class RustSourceFileGenerator {
   }
 
   private writeEnum(record: RecordLocation): void {
+    this.pushSeparator(
+      "enum ".concat(record.recordAncestors.map((r) => r.name.text).join(".")),
+    );
     const typeName = getTypeName(record);
     this.push(
       `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,

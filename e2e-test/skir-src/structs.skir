@@ -153,4 +153,8 @@ struct True {
   field: bool;
   by: bool;
   it: [Floats|x];
+  declare: bool;
+  clone: timestamp;
+  derive: bool;
+  std: bool;
 }

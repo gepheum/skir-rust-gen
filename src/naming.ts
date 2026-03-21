@@ -17,15 +17,18 @@ export function getTypeName(record: RecordLocation): string {
     .join("_");
 }
 
-export function lowerCasedNameToIdentifier(input: string): string {
-  return RESERVED_LOWER_CASED_KEYWORDS.has(input) ? `${input}_` : input;
+export function toStructFieldName(input: string): string {
+  return RESERVED_KEYWORDS.has(input) || input === "clone"
+    ? `${input}_`
+    : input;
 }
 
 export function upperCasedNameToIdentifier(input: string): string {
   return input === "Self" ? "Self_" : input;
 }
 
-const RESERVED_LOWER_CASED_KEYWORDS = new Set<string>([
+const RESERVED_KEYWORDS = new Set<string>([
+  "Self",
   // Strict keywords
   "as",
   "break",

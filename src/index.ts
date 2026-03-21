@@ -10,7 +10,7 @@ import {
   convertCase,
 } from "skir-internal";
 import { z } from "zod";
-import { getTypeName, lowerCasedNameToIdentifier } from "./naming.js";
+import { getTypeName, toStructFieldName } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
 
@@ -133,7 +133,7 @@ class RustSourceFileGenerator {
         const boxedType = `std::option::Option<std::boxed::Box<${fieldType}>>`;
         this.push(`  pub _${field.name.text}: ${boxedType},\n`);
       } else {
-        const fieldName = lowerCasedNameToIdentifier(field.name.text);
+        const fieldName = toStructFieldName(field.name.text);
         this.push(`  pub ${fieldName}: ${fieldType},\n`);
       }
     }
@@ -146,7 +146,7 @@ class RustSourceFileGenerator {
     if (hardRecursiveFields.length > 0) {
       this.push(`impl ${typeName} {\n`);
       for (const field of hardRecursiveFields) {
-        const fieldName = lowerCasedNameToIdentifier(field.name.text);
+        const fieldName = toStructFieldName(field.name.text);
         const fieldType = this.typeSpeller.getRustType(field.type!);
         this.push(`  pub fn ${fieldName}(&self) -> &${fieldType} {\n`);
         this.push(`    match &self._${field.name.text} {\n`);
@@ -167,7 +167,7 @@ class RustSourceFileGenerator {
         this.push(`  _${field.name.text}: None,\n`);
         continue;
       } else {
-        const fieldName = lowerCasedNameToIdentifier(field.name.text);
+        const fieldName = toStructFieldName(field.name.text);
         const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
         this.push(`  ${fieldName}: ${defaultExpr},\n`);
       }
@@ -208,7 +208,7 @@ class RustSourceFileGenerator {
       );
     const keyAccessor = "e.".concat(
       key.path
-        .map((p) => lowerCasedNameToIdentifier(p.name.text).concat("()"))
+        .map((p) => toStructFieldName(p.name.text).concat("()"))
         .join("."),
     );
     const { typeSpeller } = this;

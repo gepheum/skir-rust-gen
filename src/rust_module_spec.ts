@@ -20,8 +20,11 @@ export function collectRustModuleSpecs(
 ): readonly RustModuleSpec[] {
   const pathToModuleSpec = new Map<string, MutableRustModuleSpec>();
   for (const skirModule of skirModules) {
-    const rustModulePath = "_/".concat(
-      skirModule.path.replace(/-/g, "_").replace(/\.skir$/, ".rs"),
+    const rustModulePath = "base/".concat(
+      skirModule.path
+        .replace(/^@/, "external/")
+        .replace(/-/g, "_")
+        .replace(/\.skir$/, ".rs"),
     );
     // Upsert the spec for this module's own .rs file.
     {

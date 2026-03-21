@@ -64,7 +64,7 @@ export class TypeSpeller {
         if (record.record.recordType === "enum") {
           return `${rustType}::Unknown`;
         } else {
-          return `${rustType}_default().clone()`;
+          return `${rustType}::default()`;
         }
       }
       case "array": {

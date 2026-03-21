@@ -117,7 +117,7 @@ class RustSourceFileGenerator {
       const fieldType = this.typeSpeller.getRustType(field.type!);
       if (field.isRecursive === "hard") {
         const boxedType = `std::option::Option<std::boxed::Box<${fieldType}>>`;
-        this.push(`  pub _${field.name.text}: ${boxedType},\n`);
+        this.push(`  pub _${field.name.text}_rec: ${boxedType},\n`);
       } else {
         const fieldName = toStructFieldName(field.name.text);
         this.push(`  pub ${fieldName}: ${fieldType},\n`);
@@ -125,44 +125,49 @@ class RustSourceFileGenerator {
     }
     this.push("}\n\n");
 
-    // Getters for hard-recursive fields
+    // impl block: defaultRef() + getters for hard-recursive fields
     const hardRecursiveFields = struct.record.fields.filter(
       (f) => f.isRecursive === "hard",
     );
-    if (hardRecursiveFields.length > 0) {
-      this.push(`impl ${typeName} {\n`);
-      for (const field of hardRecursiveFields) {
-        const fieldName = toStructFieldName(field.name.text);
-        const fieldType = this.typeSpeller.getRustType(field.type!);
-        this.push(`  pub fn ${fieldName}(&self) -> &${fieldType} {\n`);
-        this.push(`    match &self._${field.name.text} {\n`);
-        this.push(`      Some(boxed) => boxed.as_ref(),\n`);
-        this.push(`      None => ${fieldType}_default(),\n`);
-        this.push("    }\n");
-        this.push("  }\n");
-      }
-      this.push("}\n\n");
-    }
+    this.push(`impl ${typeName} {\n`);
 
-    // Static default instance
+    // defaultRef()
+    this.push(`  pub fn defaultRef() -> &'static ${typeName} {\n`);
     this.push(
-      `static ${typeName}_DEFAULT: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(|| ${typeName} {\n`,
+      `    static D: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(|| ${typeName} {\n`,
     );
     for (const field of struct.record.fields) {
       if (field.isRecursive === "hard") {
-        this.push(`  _${field.name.text}: None,\n`);
-        continue;
+        this.push(`      _${field.name.text}_rec: None,\n`);
       } else {
         const fieldName = toStructFieldName(field.name.text);
         const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
-        this.push(`  ${fieldName}: ${defaultExpr},\n`);
+        this.push(`      ${fieldName}: ${defaultExpr},\n`);
       }
     }
-    this.push("});\n\n");
+    this.push("    });\n");
+    this.push("    &D\n");
+    this.push("  }\n");
 
-    // Default accessor function
-    this.push(`pub fn ${typeName}_default() -> &'static ${typeName} {\n`);
-    this.push(`  &${typeName}_DEFAULT\n`);
+    // Getters for hard-recursive fields
+    for (const field of hardRecursiveFields) {
+      const fieldName = toStructFieldName(field.name.text);
+      const fieldType = this.typeSpeller.getRustType(field.type!);
+      this.push(`  pub fn ${fieldName}(&self) -> &${fieldType} {\n`);
+      this.push(`    match &self._${field.name.text}_rec {\n`);
+      this.push(`      Some(boxed) => boxed.as_ref(),\n`);
+      this.push(`      None => ${fieldType}::defaultRef(),\n`);
+      this.push("    }\n");
+      this.push("  }\n");
+    }
+
+    this.push("}\n\n");
+
+    // Default trait implementation
+    this.push(`impl std::default::Default for ${typeName} {\n`);
+    this.push(`  fn default() -> Self {\n`);
+    this.push(`    ${typeName}::defaultRef().clone()\n`);
+    this.push("  }\n");
     this.push("}\n\n");
   }
 

@@ -10,7 +10,7 @@ import {
   convertCase,
 } from "skir-internal";
 import { z } from "zod";
-import { structFieldToGetterName } from "./naming.js";
+import { getTypeName, structFieldToGetterName } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
 
@@ -82,9 +82,9 @@ class RustSourceFileGenerator {
       for (const record of skirModule.records) {
         const { recordType } = record.record;
         if (recordType === "struct") {
-          this.writeTypesForStruct(record);
+          this.writeStruct(record);
         } else {
-          this.writeTypesForEnum(record);
+          this.writeEnum(record);
         }
       }
 
@@ -122,38 +122,22 @@ class RustSourceFileGenerator {
   //   this.push(")\n\n");
   // }
 
-  private writeTypesForStruct(struct: RecordLocation): void {}
-
-  // Writes the body of a builder setter for one field.
-  // fieldAccess: Go expression for the field (e.g. "b.s._foo")
-  // varName: the parameter variable name, e.g. "v"
-  private writeBuilderSetterBody(
-    field: Field,
-    fieldAccess: string,
-    varName: string,
-  ): void {
-    const type = field.type!;
-    if (type.kind === "array") {
-      // Array: direct assignment + reset indexed cache if keyed
-      this.push(`  ${fieldAccess} = ${varName}\n`);
-      const keyedArrayHelper = this.getKeyedArrayHelper(field);
-      if (keyedArrayHelper) {
-        this.push(
-          `${fieldAccess}_indexed = &atomic.Pointer[${keyedArrayHelper.mapType}]{}\n`,
-        );
-      }
-    } else {
-      if (this.isStructType(type)) {
-        const fieldName = convertCase(field.name.text, "UpperCamel");
-        this.push(`if ${varName} == nil {\n`);
-        this.push(`  panic("Set${fieldName}: value must not be nil")\n`);
-        this.push("}\n");
-      }
-      this.push(`  ${fieldAccess} = ${varName}\n`);
+  private writeStruct(struct: RecordLocation): void {
+    const typeName = getTypeName(struct);
+    this.push(`pub struct ${typeName} {\n`);
+    for (const field of struct.record.fields) {
+      const fieldName = field.name.text;
+      const fieldType = this.typeSpeller.getRustType(field.type!);
+      this.push(`  pub ${fieldName}: ${fieldType},\n`);
     }
+    this.push("}\n\n");
   }
 
-  private writeTypesForEnum(record: RecordLocation): void {}
+  private writeEnum(record: RecordLocation): void {
+    const typeName = getTypeName(record);
+    this.push(`pub enum ${typeName} {\n`);
+    this.push("}\n\n");
+  }
 
   private writeMethod(method: Method): void {}
 
@@ -179,7 +163,7 @@ class RustSourceFileGenerator {
         .join("."),
     );
     const { typeSpeller } = this;
-    const itemType = typeSpeller.getGoType(type.item);
+    const itemType = typeSpeller.getRustType(type.item);
     const makeMapType = (comp: string): string => `map[${comp}]${itemType}`;
     const { keyType } = key;
     switch (keyType.kind) {
@@ -193,7 +177,7 @@ class RustSourceFileGenerator {
           case "string":
           case "hash64": {
             // The simple case: the key type is already comparable.
-            const comparableType = typeSpeller.getGoType(keyType);
+            const comparableType = typeSpeller.getRustType(keyType);
             return {
               searchMethodName: searchMethodName,
               itemType: itemType,
@@ -225,7 +209,7 @@ class RustSourceFileGenerator {
         break;
       }
       case "record": {
-        const comparableType = typeSpeller.getGoType(keyType).concat("_kind");
+        const comparableType = typeSpeller.getRustType(keyType).concat("_kind");
         return {
           searchMethodName: searchMethodName,
           itemType: itemType,

@@ -1,5 +1,5 @@
 import type { RecordKey, RecordLocation, ResolvedType } from "skir-internal";
-import { getClassName } from "./naming.js";
+import { getTypeName, toRustPathPrefix } from "./naming.js";
 
 /**
  * Transforms a type found in a `.skir` file into a Go type.
@@ -7,46 +7,50 @@ import { getClassName } from "./naming.js";
 export class TypeSpeller {
   constructor(
     readonly recordMap: ReadonlyMap<RecordKey, RecordLocation>,
-    readonly rustModulePath: string,
+    readonly skirModulePath: string | undefined,
   ) {}
 
-  getGoType(type: ResolvedType): string {
+  getRustType(type: ResolvedType): string {
     switch (type.kind) {
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
-        const className = getClassName(recordLocation);
-        // TODO: change this
-        if (recordLocation.modulePath === this.rustModulePath) {
+        const className = getTypeName(recordLocation);
+        if (recordLocation.modulePath === this.skirModulePath) {
           return className;
         } else {
-          const packageAlias = recordLocation.modulePath;
-          return `${packageAlias}.${className}`;
+          const rustPathPrefix = toRustPathPrefix(recordLocation.modulePath);
+          return `${rustPathPrefix}::${className}`;
         }
       }
       case "array": {
-        const itemType = this.getGoType(type.item);
-        return `skir_client.Array[${itemType}]`;
+        const itemType = this.getRustType(type.item);
+        return `std::vec::Vec<${itemType}>`;
       }
       case "optional": {
-        const otherType = this.getGoType(type.other);
-        return `skir_client.Optional[${otherType}]`;
+        const otherType = this.getRustType(type.other);
+        return `std::option::Option<${otherType}>`;
       }
       case "primitive": {
         const { primitive } = type;
         switch (primitive) {
           case "bool":
+            return "bool";
           case "int32":
+            return "i32";
           case "int64":
+            return "i64";
           case "float32":
+            return "f32";
           case "float64":
+            return "f64";
           case "string":
-            return primitive;
+            return "std::string::String";
           case "hash64":
-            return "uint64";
+            return "u64";
           case "timestamp":
-            return "time.Time";
+            return "std::time::Instant";
           case "bytes":
-            return "skir_client.Bytes";
+            return "std::vec::Vec<u8>";
         }
       }
     }
@@ -54,7 +58,7 @@ export class TypeSpeller {
 
   getClassName(recordKey: RecordKey): string {
     const record = this.recordMap.get(recordKey)!;
-    return getClassName(record);
+    return getTypeName(record);
   }
 
   getSerializerExpression(type: ResolvedType): string {
@@ -112,9 +116,8 @@ export class TypeSpeller {
       }
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
-        const className = getClassName(recordLocation);
-        // TODO: change this
-        if (recordLocation.modulePath === this.rustModulePath) {
+        const className = getTypeName(recordLocation);
+        if (recordLocation.modulePath === this.skirModulePath) {
           return `${className}_serializer()`;
         } else {
           const packageAlias = recordLocation.modulePath;

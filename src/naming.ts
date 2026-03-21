@@ -1,10 +1,13 @@
 import { type Field, type RecordLocation, convertCase } from "skir-internal";
 
-export function skirModulePathToUsePath(modulePath: string): string {
-  return modulePath
-    .replace(/^@/, "external/")
-    .replace(/-/g, "_")
-    .replace(/\.skir$/, "");
+export function toRustPathPrefix(modulePath: string): string {
+  return "crate::skirout::base::".concat(
+    modulePath
+      .replace(/^@/, "external/")
+      .replace(/-/g, "_")
+      .replace(/\.skir$/, "")
+      .replace(/\//g, "::"),
+  );
 }
 
 export function structFieldToGetterName(field: Field | string): string {
@@ -17,7 +20,7 @@ export function structFieldToGetterName(field: Field | string): string {
     : upperCamel;
 }
 
-/** Returns the name of the frozen Go struct for the given record. */
-export function getClassName(record: RecordLocation): string {
+/** Returns the name of the Rust type for the given record. */
+export function getTypeName(record: RecordLocation): string {
   return record.recordAncestors.map((r) => r.name.text).join("_");
 }

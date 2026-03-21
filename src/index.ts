@@ -107,25 +107,11 @@ class RustSourceFileGenerator {
     return this.joinLinesAndFixFormatting();
   }
 
-  // private writeImports(): void {
-  //   this.push(`import (
-  //     "github.com/gepheum/skir-go-client"
-  //     "sync/atomic"
-  //     "time"
-  //   `);
-  //   for (const importedPath of Object.keys(this.inModule.pathToImportedNames)) {
-  //     const alias = modulePathToAlias(importedPath);
-  //     const packagePath = modulePathToPackagePath(importedPath);
-  //     this.push(
-  //       `${alias} "${this.config.goModuleName}/skirout/${packagePath}"\n`,
-  //     );
-  //   }
-  //   this.push(")\n\n");
-  // }
-
   private writeStruct(struct: RecordLocation): void {
     const typeName = getTypeName(struct);
-    this.push(`#[derive(std::clone::Clone)]\n`);
+    this.push(
+      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,
+    );
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
       const fieldType = this.typeSpeller.getRustType(field.type!);
@@ -182,7 +168,9 @@ class RustSourceFileGenerator {
 
   private writeEnum(record: RecordLocation): void {
     const typeName = getTypeName(record);
-    this.push(`#[derive(std::clone::Clone)]\n`);
+    this.push(
+      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,
+    );
     this.push(`pub enum ${typeName} {\n`);
     this.push(`  Unknown,\n`);
     this.push("}\n\n");

@@ -7,7 +7,7 @@ import { getClassName } from "./naming.js";
 export class TypeSpeller {
   constructor(
     readonly recordMap: ReadonlyMap<RecordKey, RecordLocation>,
-    readonly modulePath: string,
+    readonly rustModulePath: string,
   ) {}
 
   getGoType(type: ResolvedType): string {
@@ -15,7 +15,8 @@ export class TypeSpeller {
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
         const className = getClassName(recordLocation);
-        if (recordLocation.modulePath === this.modulePath) {
+        // TODO: change this
+        if (recordLocation.modulePath === this.rustModulePath) {
           return className;
         } else {
           const packageAlias = recordLocation.modulePath;
@@ -112,7 +113,8 @@ export class TypeSpeller {
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
         const className = getClassName(recordLocation);
-        if (recordLocation.modulePath === this.modulePath) {
+        // TODO: change this
+        if (recordLocation.modulePath === this.rustModulePath) {
           return `${className}_serializer()`;
         } else {
           const packageAlias = recordLocation.modulePath;

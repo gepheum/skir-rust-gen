@@ -4,7 +4,6 @@ import {
   type Doc,
   type Field,
   type Method,
-  type Module,
   type RecordKey,
   type RecordLocation,
   type ResolvedType,
@@ -12,6 +11,7 @@ import {
 } from "skir-internal";
 import { z } from "zod";
 import { getClassName, structFieldToGetterName } from "./naming.js";
+import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
 
 const Config = z.strictObject({});
@@ -25,10 +25,15 @@ class RustCodeGenerator implements CodeGenerator<Config> {
   generateCode(input: CodeGenerator.Input<Config>): CodeGenerator.Output {
     const { recordMap, config } = input;
     const outputFiles: CodeGenerator.OutputFile[] = [];
-    for (const module of input.modules) {
+    const rustModuleSpecs = collectRustModuleSpecs(input.modules);
+    for (const moduleSpec of rustModuleSpecs) {
       outputFiles.push({
-        path: module.path.replace(/\.skir$/, ".rs"),
-        code: new RustSourceFileGenerator(module, recordMap, config).generate(),
+        path: moduleSpec.path,
+        code: new RustSourceFileGenerator(
+          moduleSpec,
+          recordMap,
+          config,
+        ).generate(),
       });
     }
     return { files: outputFiles };
@@ -38,11 +43,11 @@ class RustCodeGenerator implements CodeGenerator<Config> {
 // Generates the code for one Rust file.
 class RustSourceFileGenerator {
   constructor(
-    private readonly inModule: Module,
+    private readonly moduleSpec: RustModuleSpec,
     recordMap: ReadonlyMap<RecordKey, RecordLocation>,
     private readonly config: Config,
   ) {
-    this.typeSpeller = new TypeSpeller(recordMap, inModule.path);
+    this.typeSpeller = new TypeSpeller(recordMap, moduleSpec.path);
   }
 
   generate(): string {
@@ -66,37 +71,37 @@ class RustSourceFileGenerator {
       `,
     );
 
-    // this.writeImports();
-
-    for (const record of this.inModule.records) {
-      const { recordType } = record.record;
-      if (recordType === "struct") {
-        this.writeTypesForStruct(record);
-      } else {
-        this.writeTypesForEnum(record);
-      }
+    for (const childModuleName of this.moduleSpec.childModuleNames) {
+      this.push(`pub mod ${childModuleName};\n`);
     }
 
-    if (this.inModule.methods.length) {
-      this.pushSeparator("Methods");
-      for (const method of this.inModule.methods) {
-        this.writeMethod(method);
+    this.push("\n");
+
+    const skirModule = this.moduleSpec.skirModule;
+    if (skirModule) {
+      for (const record of skirModule.records) {
+        const { recordType } = record.record;
+        if (recordType === "struct") {
+          this.writeTypesForStruct(record);
+        } else {
+          this.writeTypesForEnum(record);
+        }
+      }
+
+      if (skirModule.methods.length) {
+        this.pushSeparator("Methods");
+        for (const method of skirModule.methods) {
+          this.writeMethod(method);
+        }
+      }
+
+      if (skirModule.constants.length) {
+        this.pushSeparator("Constants");
+        for (const constant of skirModule.constants) {
+          this.writeConstant(constant);
+        }
       }
     }
-
-    if (this.inModule.constants.length) {
-      this.pushSeparator("Constants");
-      for (const constant of this.inModule.constants) {
-        this.writeConstant(constant);
-      }
-    }
-
-    // To disable unused import errors.
-    this.push(
-      "var _ = skir_client.Array[bool]{}\n",
-      "var _ = atomic.Pointer[bool]{}\n",
-      "var _ = time.Time{}\n",
-    );
 
     return this.joinLinesAndFixFormatting();
   }

@@ -1,0 +1,59 @@
+{
+  "name": "skir-rust-gen",
+  "version": "0.1.0",
+  "description": "",
+  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gepheum/skir-go-gen.git"
+  },
+  "license": "ISC",
+  "author": "Tyler Fibonacci <gepheum@gmail.com>",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "module": "./dist/index.js",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "format-skir": "cd e2e-test && skir format && cd ..",
+    "format-skir:check": "cd e2e-test && skir format --ci && cd ..",
+    "format": "prettier --write \"**/*.ts\" && npm run format-skir",
+    "format:check": "prettier --check \"**/*.ts\" && npm run format-skir:check",
+    "test": "npm run build && cd e2e-test && skir gen && cd ..",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
+  },
+  "dependencies": {
+    "skir-internal": "^0.1.1",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
+    "buckwheat": "^1.1.2",
+    "eslint": "^10.0.1",
+    "mocha": "^11.7.5",
+    "prettier": "^3.2.4",
+    "prettier-plugin-organize-imports": "^4.2.0",
+    "skir": "^1.1.10",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.2.2",
+    "typescript-eslint": "^8.56.0"
+  },
+  "overrides": {
+    "diff": "^8.0.3",
+    "minimatch": "^10.2.2",
+    "serialize-javascript": "^7.0.3"
+  }
+}

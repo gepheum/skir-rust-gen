@@ -241,7 +241,7 @@ class RustSourceFileGenerator {
       .join(".");
     this.push(`impl ${typeName} {\n`);
     this.push(
-      `pub fn _adapter() -> &'static crate::skir_client::internal::StructAdapter<${typeName}> {\n`,
+      `fn _adapter() -> &'static crate::skir_client::internal::StructAdapter<${typeName}> {\n`,
     );
     this.push(
       `static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::StructAdapter<${typeName}>> =\n`,
@@ -354,7 +354,7 @@ class RustSourceFileGenerator {
       .join(".");
     this.push(`impl ${typeName} {\n`);
     this.push(
-      `pub fn _adapter() -> &'static crate::skir_client::internal::EnumAdapter<${typeName}> {\n`,
+      `fn _adapter() -> &'static crate::skir_client::internal::EnumAdapter<${typeName}> {\n`,
     );
     this.push(
       `  static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::EnumAdapter<${typeName}>> =\n`,

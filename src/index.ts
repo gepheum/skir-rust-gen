@@ -1,10 +1,10 @@
-// TODO: why does add_constant_variant expect an instance_fn????? It makes no sense...
 // Golden tests...
 // TODO: address all lints...
 // TODO: format rust code
 // TODO: if I have a recursive fiedld, Equal() is not working...
 //   TODO: I think I may want to create my own Rec<>...
 // TODO: comments (in code, in runtime, )
+// TODO: look at UTF-8 safety
 // TODO: methods
 // TODO: constants
 // TODO: SkiRPC
@@ -480,7 +480,7 @@ class RustSourceFileGenerator {
             );
           } else {
             this.push(
-              `(*a).add_constant_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, "", || ${typeName}::${variantName});\n`,
+              `(*a).add_constant_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, "", ${typeName}::${variantName});\n`,
             );
           }
           kindOrdinal++;

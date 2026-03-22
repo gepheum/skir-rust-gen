@@ -8,7 +8,7 @@ use super::super::reflection::{
 };
 use super::super::serializer::{Serializer, TypeAdapter};
 use super::super::serializers::{
-    decode_number, decode_number_body, encode_uint32, read_u8, skip_value,
+    decode_number, decode_number_body, encode_uint32, read_u8, skip_value, write_json_escaped_string,
 };
 use super::super::unrecognized::internal::{UnrecognizedFormat, UnrecognizedVariantData};
 
@@ -41,13 +41,13 @@ trait VariantEntry<T>: Send + Sync {
 // ConstantEntry
 // =============================================================================
 
-struct ConstantEntry<T: 'static> {
+struct ConstantEntry<T: 'static + Clone + Send + Sync> {
     name: String,
     number: i32,
-    instance_fn: fn() -> T,
+    instance: T,
 }
 
-impl<T: 'static> VariantEntry<T> for ConstantEntry<T> {
+impl<T: 'static + Clone + Send + Sync> VariantEntry<T> for ConstantEntry<T> {
     fn number(&self) -> i32 {
         self.number
     }
@@ -55,7 +55,7 @@ impl<T: 'static> VariantEntry<T> for ConstantEntry<T> {
         false
     }
     fn instance(&self) -> T {
-        (self.instance_fn)()
+        self.instance.clone()
     }
 
     fn to_json(&self, _frozen: &T, eol_indent: Option<&str>, out: &mut String) {
@@ -215,14 +215,14 @@ impl<T: 'static + Default> EnumAdapter<T> {
         number: i32,
         kind_ordinal: usize,
         doc: &str,
-        instance_fn: fn() -> T,
-    ) {
+        instance: T,
+    ) where T: Clone + Send + Sync {
         self.number_to_entry.insert(number, AnyEntry::Constant(kind_ordinal));
         self.name_to_kind_ordinal.insert(name.to_string(), kind_ordinal);
         let entry: Box<dyn VariantEntry<T>> = Box::new(ConstantEntry {
             name: name.to_string(),
             number,
-            instance_fn,
+            instance,
         });
         self.set_kind_ordinal_entry(kind_ordinal, entry);
         self.desc_variants.push(EnumVariant::Constant(EnumConstantVariant::new(
@@ -582,28 +582,6 @@ pub fn enum_serializer_from_static<T: 'static + Default>(
     Serializer::new_borrowed(adapter)
 }
 
-// =============================================================================
-// JSON helpers
-// =============================================================================
-
-fn write_json_escaped_string(s: &str, out: &mut String) {
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                out.push_str(&format!("\\u{:04x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-}
-
 } // pub mod internal
 
 // =============================================================================
@@ -659,10 +637,6 @@ mod tests {
         }
     }
 
-    fn color_unknown() -> Color {
-        Color::Unknown
-    }
-
     fn color_wrap_unrecognized(u: Box<UnrecognizedVariantData<Color>>) -> Color {
         Color::Unrecognized(u)
     }
@@ -674,12 +648,6 @@ mod tests {
         }
     }
 
-    fn red_fn() -> Color {
-        Color::Red
-    }
-    fn green_fn() -> Color {
-        Color::Green
-    }
     fn wrap_int32(v: i32) -> Color {
         Color::Wrapped(v)
     }
@@ -700,8 +668,8 @@ mod tests {
             "A test color enum.",
             HashSet::new(),
         );
-        a.add_constant_variant("RED", 1, 1, "The color red.", red_fn);
-        a.add_constant_variant("GREEN", 2, 2, "The color green.", green_fn);
+        a.add_constant_variant("RED", 1, 1, "The color red.", Color::Red);
+        a.add_constant_variant("GREEN", 2, 2, "The color green.", Color::Green);
         a.add_wrapper_variant(
             "WRAPPED",
             3,
@@ -904,7 +872,7 @@ mod tests {
             "",
             HashSet::new(),
         );
-        a.add_constant_variant("RED", 1, 1, "", red_fn);
+        a.add_constant_variant("RED", 1, 1, "", Color::Red);
         a.add_removed_number(5); // variant 5 was removed
         a.finalize();
         crate::skir_client::internal::enum_serializer_from_static(Box::leak(Box::new(a)))

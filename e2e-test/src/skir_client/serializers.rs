@@ -691,7 +691,7 @@ fn millis_to_iso8601(ms: i64) -> String {
 
 /// Writes `s` as a JSON string literal to `out`, escaping `"`, `\`, and
 /// control characters.
-fn write_json_escaped_string(s: &str, out: &mut String) {
+pub(super) fn write_json_escaped_string(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
         match c {

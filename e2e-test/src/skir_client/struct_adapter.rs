@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use super::super::reflection::{StructDescriptor, StructField, TypeDescriptor};
 use super::super::serializer::{Serializer, TypeAdapter};
-use super::super::serializers::{decode_number, encode_uint32, read_u8, skip_value};
+use super::super::serializers::{decode_number, encode_uint32, read_u8, skip_value, write_json_escaped_string};
 use super::super::unrecognized::internal::{UnrecognizedFieldsData, UnrecognizedFormat};
 
 // =============================================================================
@@ -551,28 +551,6 @@ pub fn struct_serializer_from_static<T: 'static + Default>(
     adapter: &'static StructAdapter<T>,
 ) -> Serializer<T> {
     Serializer::new_borrowed(adapter)
-}
-
-// =============================================================================
-// JSON helpers
-// =============================================================================
-
-fn write_json_escaped_string(s: &str, out: &mut String) {
-    out.push('"');
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                out.push_str(&format!("\\u{:04x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
 }
 
 } // pub mod internal

@@ -1,57 +1,124 @@
-import { FieldPath, Module, RecordKey, ResolvedType } from "skir-internal";
+import {
+  convertCase,
+  FieldPath,
+  Module,
+  Record,
+  RecordKey,
+  ResolvedType,
+} from "skir-internal";
+import { toStructFieldName } from "./naming.js";
+import { TypeSpeller } from "./type_speller.js";
 
-/** Pre-computed index of all keyed arrays found across the schema modules. */
-export interface KeyedArrayContext {
-  /**
-   * Maps each record type (used as a keyed-array item) to the set of key
-   * extractors declared for it. Each extractor is identified by its
-   * dot-separated field path (e.g. `"owner.id"`) and carries the full
-   * `FieldPath`.
-   */
-  readonly recordKeyToKeyExtractors: ReadonlyMap<
-    RecordKey,
-    ReadonlyMap<string, FieldPath>
-  >;
-  /** Record keys of enum types that appear as the key type of a keyed array. */
-  readonly enumsUsedAsKeys: ReadonlySet<RecordKey>;
+export interface KeySpec {
+  /** For example "Item_byId". */
+  readonly rustSpecName: string;
+  /** For example "i32", "Weekday_kind". */
+  readonly rustKeyType: string;
+  /** For example "item.id". */
+  readonly rustKeyExpr: string;
+  readonly lookupImpl: "CopyLookup" | "BorrowLookup";
 }
 
-/** Scans all modules and builds a {@link KeyedArrayContext} from their keyed arrays. */
-export function createKeyedArrayContext(
-  skirModules: readonly Module[],
-): KeyedArrayContext {
-  const recordKeyToKeyExtractors = new Map<RecordKey, Map<string, FieldPath>>();
-  const enumsUsedAsKeys = new Set<RecordKey>();
-  const processType = (type: ResolvedType | undefined): void => {
-    if (type?.kind !== "array" || !type.key) return;
-    const keyExtractor = type.key.path.map((part) => part.name.text).join(".");
-    const { item } = type;
-    if (item.kind !== "record") {
-      throw new TypeError();
-    }
-    const keyExtractors =
-      recordKeyToKeyExtractors.get(item.key) ?? new Map<string, FieldPath>();
-    if (keyExtractors.size <= 0) {
-      recordKeyToKeyExtractors.set(item.key, keyExtractors);
-    }
-    keyExtractors.set(keyExtractor, type.key);
-    if (type.key.keyType.kind === "record") {
-      enumsUsedAsKeys.add(type.key.keyType.key);
-    }
-  };
-  for (const skirModule of skirModules) {
-    for (const record of skirModule.records) {
-      for (const field of record.record.fields) {
-        processType(field.type);
+export class KeyedArrayContext {
+  constructor(skirModules: readonly Module[]) {
+    const { enumsUsedAsKeys, recordKeyToKeyMap } = this;
+    const processType = (type: ResolvedType | undefined): void => {
+      if (type?.kind !== "array" || !type.key) return;
+      const { keyType } = type.key;
+      if (
+        keyType.kind === "primitive" &&
+        (keyType.primitive === "float32" ||
+          keyType.primitive === "float64" ||
+          keyType.primitive === "bytes")
+      ) {
+        // f32 and f64 don't implement Eq in Rust.
+        // bytes is just a pain to deal with, and it's unlikely to be used as a
+        // keyed array key.
+        return;
       }
+      const keySpec = type.key.path.map((part) => part.name.text).join(".");
+      const { item } = type;
+      if (item.kind !== "record") {
+        throw new TypeError();
+      }
+      const keyMap =
+        recordKeyToKeyMap.get(item.key) ?? new Map<string, FieldPath>();
+      if (keyMap.size <= 0) {
+        recordKeyToKeyMap.set(item.key, keyMap);
+      }
+      keyMap.set(keySpec, type.key);
+      if (keyType.kind === "record") {
+        enumsUsedAsKeys.add(keyType.key);
+      }
+    };
+    for (const skirModule of skirModules) {
+      for (const record of skirModule.records) {
+        for (const field of record.record.fields) {
+          processType(field.type);
+        }
+      }
+      skirModule.constants.forEach((constant) => {
+        processType(constant.type);
+      });
+      skirModule.methods.forEach((method) => {
+        processType(method.requestType);
+        processType(method.responseType);
+      });
     }
-    skirModule.constants.forEach((constant) => {
-      processType(constant.type);
-    });
-    skirModule.methods.forEach((method) => {
-      processType(method.requestType);
-      processType(method.responseType);
-    });
   }
-  return { recordKeyToKeyExtractors, enumsUsedAsKeys };
+
+  getKeySpecsForItemStruct(
+    struct: Record,
+    typeSpeller: TypeSpeller,
+  ): readonly KeySpec[] {
+    const keyMap = this.recordKeyToKeyMap.get(struct.key);
+    return keyMap
+      ? [...keyMap.values()].map((fieldPath) => {
+          const rustSpecName = typeSpeller
+            .getTypeName(struct.key)
+            .concat("_by")
+            .concat(
+              fieldPath.path
+                .map((p) => convertCase(p.name.text, "UpperCamel"))
+                .join("_"),
+            );
+          const { keyType } = fieldPath;
+          const keyTypeIsString =
+            keyType.kind === "primitive" && keyType.primitive === "string";
+          let rustKeyType = typeSpeller.getRustType(keyType);
+          let rustKeyExpr = "item.".concat(
+            fieldPath.path
+              .map((p) =>
+                toStructFieldName(p.name.text).concat(
+                  p.declaration?.isRecursive === "hard" ? "()" : "",
+                ),
+              )
+              .join("."),
+          );
+          if (fieldPath.keyType.kind === "record") {
+            rustKeyType = rustKeyType.concat("_kind");
+            // ".kind" -> ".kind()"
+            rustKeyExpr = rustKeyExpr.concat("()");
+          } else if (keyTypeIsString) {
+            rustKeyExpr = rustKeyExpr.concat(".clone()");
+          }
+          return {
+            rustSpecName: rustSpecName,
+            rustKeyType: rustKeyType,
+            rustKeyExpr: rustKeyExpr,
+            lookupImpl: keyTypeIsString ? "BorrowLookup" : "CopyLookup",
+          };
+        })
+      : [];
+  }
+
+  isEnumUsedAsKey(enumType: Record): boolean {
+    return this.enumsUsedAsKeys.has(enumType.key);
+  }
+
+  private readonly recordKeyToKeyMap = new Map<
+    RecordKey,
+    Map<string, FieldPath>
+  >();
+  private readonly enumsUsedAsKeys = new Set<RecordKey>();
 }

@@ -130,7 +130,7 @@ export class TypeSpeller {
     }
   }
 
-  getClassName(recordKey: RecordKey): string {
+  getTypeName(recordKey: RecordKey): string {
     const record = this.recordMap.get(recordKey)!;
     return getTypeName(record);
   }

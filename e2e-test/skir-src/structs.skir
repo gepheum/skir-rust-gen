@@ -157,4 +157,5 @@ struct True {
   clone: timestamp;
   derive: bool;
   std: bool;
+  fmt: bytes;
 }

@@ -92,4 +92,5 @@ const GENERARATED_STRUCT_METHODS = new Set<string>([
   "clone",
   "default",
   "default_ref",
+  "fmt",
 ]);

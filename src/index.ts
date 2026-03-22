@@ -1,8 +1,4 @@
-// defaultRef() -> default_ref()?
-// find_by_key_or_default()?
 // TODO: make unreocgnized fields Option, instead of defining the Option in the client lib as a typedef
-// Possibly add the `kind` to the enum if needed by KeyedVec
-// Possibly add the GetKey implementations...
 
 import {
   type CodeGenerator,
@@ -16,14 +12,11 @@ import {
   type ResolvedType,
 } from "skir-internal";
 import { z } from "zod";
-import {
-  createKeyedArrayContext,
-  KeyedArrayContext,
-} from "./keyed_array_context.js";
+import { KeyedArrayContext } from "./keyed_array_context.js";
 import {
   getTypeName,
   isUpperCasedKeyword,
-  toStructFieldName,
+  toStructFieldName as toRustFieldName,
 } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
@@ -38,7 +31,7 @@ class RustCodeGenerator implements CodeGenerator<Config> {
 
   generateCode(input: CodeGenerator.Input<Config>): CodeGenerator.Output {
     const { recordMap, config } = input;
-    const keyedArrayContext = createKeyedArrayContext(input.modules);
+    const keyedArrayContext = new KeyedArrayContext(input.modules);
     const rustModuleSpecs = collectRustModuleSpecs(input.modules);
     const outputFiles = rustModuleSpecs.map((moduleSpec) => ({
       path: moduleSpec.path,
@@ -122,6 +115,8 @@ class RustSourceFileGenerator {
   }
 
   private writeStruct(struct: RecordLocation): void {
+    const { typeSpeller } = this;
+
     this.pushSeparator(
       "struct ".concat(
         struct.recordAncestors.map((r) => r.name.text).join("."),
@@ -131,7 +126,7 @@ class RustSourceFileGenerator {
     const allFieldsUseRustDefault = struct.record.fields.every(
       (f) =>
         f.isRecursive === "hard" ||
-        this.typeSpeller.skirDefaultIsRustDefault(f.type!),
+        typeSpeller.skirDefaultIsRustDefault(f.type!),
     );
     const deriveList = allFieldsUseRustDefault
       ? `std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq, std::default::Default`
@@ -139,12 +134,12 @@ class RustSourceFileGenerator {
     this.push(`#[derive(${deriveList})]\n`);
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
-      const fieldType = this.typeSpeller.getRustType(field.type!);
+      const fieldType = typeSpeller.getRustType(field.type!);
       if (field.isRecursive === "hard") {
         const boxedType = `std::option::Option<std::boxed::Box<${fieldType}>>`;
         this.push(`  pub _${field.name.text}_rec: ${boxedType},\n`);
       } else {
-        const fieldName = toStructFieldName(field.name.text);
+        const fieldName = toRustFieldName(field.name.text);
         this.push(`  pub ${fieldName}: ${fieldType},\n`);
       }
     }
@@ -169,9 +164,9 @@ class RustSourceFileGenerator {
 
     // Getters for hard-recursive fields
     for (const field of hardRecursiveFields) {
-      const fieldName = toStructFieldName(field.name.text);
-      const fieldType = this.typeSpeller.getRustType(field.type!);
-      this.push(`  pub fn ${fieldName}(&self) -> &${fieldType} {\n`);
+      const getterName = toRustFieldName(field.name.text);
+      const fieldType = typeSpeller.getRustType(field.type!);
+      this.push(`  pub fn ${getterName}(&self) -> &${fieldType} {\n`);
       this.push(`    match &self._${field.name.text}_rec {\n`);
       this.push(`      Some(boxed) => boxed.as_ref(),\n`);
       this.push(`      None => ${fieldType}::default_ref(),\n`);
@@ -190,8 +185,8 @@ class RustSourceFileGenerator {
         if (field.isRecursive === "hard") {
           this.push(`      _${field.name.text}_rec: None,\n`);
         } else {
-          const fieldName = toStructFieldName(field.name.text);
-          const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
+          const fieldName = toRustFieldName(field.name.text);
+          const defaultExpr = typeSpeller.getDefaultExpr(field.type!);
           this.push(`      ${fieldName}: ${defaultExpr},\n`);
         }
       }
@@ -201,22 +196,26 @@ class RustSourceFileGenerator {
       this.push("}\n\n");
     }
 
-    // Write a GetKey impl for each keyed array that has this struct as item type.
-    const keyedArrayExtractors =
-      this.keyedArrayContext.recordKeyToKeyExtractors.get(struct.record.key);
-    for (const fieldPath of keyedArrayExtractors?.values() ?? []) {
-      const implName = typeName
-        .concat("_by")
-        .concat(
-          fieldPath.path
-            .map((p) => convertCase(p.name.text, "UpperCamel"))
-            .join("_"),
-        );
-      this.push(`struct ${implName};\n\n`);
+    // Write a KeyedVecSpec impl for each keyed array that has this struct as item type.
+    for (const keySpec of this.keyedArrayContext.getKeySpecsForItemStruct(
+      struct.record,
+      typeSpeller,
+    )) {
+      this.push(`struct ${keySpec.rustSpecName};\n\n`);
       this.push(
-        `impl crate::skir_client::keyed_vec::GetKey for ${implName} {\n`,
+        `impl crate::skir_client::keyed_vec::KeyedVecSpec for ${keySpec.rustSpecName} {\n`,
       );
-      this.push(`  type Item = ${typeName};\n`);
+      this.push(`type Item = ${typeName};\n`);
+      this.push(`type StorageKey = ${keySpec.rustKeyType};\n`);
+      this.push(
+        `type Lookup = crate::skir_client::keyed_vec::internal::${keySpec.lookupImpl};\n`,
+      );
+      this.push(`fn get_key(item: &${typeName}) -> ${keySpec.rustKeyType} {\n`);
+      this.push(`  ${keySpec.rustKeyExpr}\n`);
+      this.push("}\n");
+      this.push(`fn default_item() -> &'static ${typeName} {\n`);
+      this.push(`  ${typeName}::default_ref()\n`);
+      this.push("}\n");
       this.push("}\n\n");
     }
   }
@@ -258,6 +257,44 @@ class RustSourceFileGenerator {
     this.push(`    ${typeName}::Unknown(None)\n`);
     this.push("  }\n");
     this.push("}\n\n");
+    if (this.keyedArrayContext.isEnumUsedAsKey(record.record)) {
+      // Write the _kind enum.
+      this.push(
+        `#[derive(std::fmt::Debug, std::clone::Clone, std::marker::Copy, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq)]\n`,
+      );
+      this.push(`pub enum ${typeName}_kind {\n`);
+      this.push("  Unknown,\n");
+      for (const variant of record.record.fields) {
+        const variantName = convertCase(variant.name.text, "UpperCamel").concat(
+          variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
+        );
+        this.push(`  ${variantName},\n`);
+      }
+      this.push("}\n\n");
+
+      // Write the kind() getter on the main enum.
+      this.push(`impl ${typeName} {\n`);
+      this.push(`pub fn kind(&self) -> ${typeName}_kind {\n`);
+      this.push(`match self {\n`);
+      this.push(`${typeName}::Unknown(_) => ${typeName}_kind::Unknown,\n`);
+      for (const variant of record.record.fields) {
+        const variantName = convertCase(variant.name.text, "UpperCamel").concat(
+          variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
+        );
+        if (variant.type) {
+          this.push(
+            `${typeName}::${variantName}(_) => ${typeName}_kind::${variantName},\n`,
+          );
+        } else {
+          this.push(
+            `${typeName}::${variantName} => ${typeName}_kind::${variantName},\n`,
+          );
+        }
+      }
+      this.push("}\n");
+      this.push("}\n");
+      this.push("}\n\n");
+    }
   }
 
   private writeMethod(method: Method): void {}

@@ -26,7 +26,7 @@ enum AnyEntry {
 // VariantEntry – type-erased per-variant adapter
 // =============================================================================
 
-trait VariantEntry<T> {
+trait VariantEntry<T>: Send + Sync {
     fn kind_ordinal(&self) -> usize;
     fn name(&self) -> &str;
     fn number(&self) -> i32;

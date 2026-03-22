@@ -14,7 +14,7 @@ use super::super::unrecognized::internal::{UnrecognizedFieldsData, UnrecognizedF
 
 /// Type-erased interface for a single struct field.
 /// The concrete implementation is [`TypedField`].
-trait FieldEntry<T> {
+trait FieldEntry<T>: Send + Sync {
     fn entry_name(&self) -> &str;
     fn entry_number(&self) -> i32;
     fn entry_doc(&self) -> &str;
@@ -114,7 +114,6 @@ impl<T: 'static, V: 'static> FieldEntry<T> for TypedField<T, V> {
 /// [`StructAdapter::into_serializer`] to finish.
 pub struct StructAdapter<T: 'static> {
     default_instance: fn() -> T,
-    is_default_instance: fn(&T) -> bool,
     new_fn: fn() -> T,
     get_unrecognized: fn(&T) -> Option<&UnrecognizedFieldsData<T>>,
     set_unrecognized: fn(&mut T, Option<Box<UnrecognizedFieldsData<T>>>),
@@ -137,7 +136,6 @@ impl<T: 'static> StructAdapter<T> {
     /// for each field and removed number, then [`into_serializer`](Self::into_serializer).
     pub fn new(
         default_instance: fn() -> T,
-        is_default_instance: fn(&T) -> bool,
         new_fn: fn() -> T,
         module_path: &str,
         qualified_name: &str,
@@ -157,7 +155,6 @@ impl<T: 'static> StructAdapter<T> {
             ));
         StructAdapter {
             default_instance,
-            is_default_instance,
             new_fn,
             get_unrecognized,
             set_unrecognized,
@@ -257,9 +254,6 @@ impl<T: 'static> StructAdapter<T> {
     // -----------------------------------------------------------------------
 
     fn is_default_impl(&self, input: &T) -> bool {
-        if (self.is_default_instance)(input) {
-            return true;
-        }
         if (self.get_unrecognized)(input).is_some() {
             return false;
         }
@@ -667,7 +661,6 @@ mod tests {
     fn make_point_serializer() -> Serializer<Point> {
         let mut a = StructAdapter::new(
             Point::default,
-            is_default,
             Point::default,
             "test",
             "Point",
@@ -914,7 +907,6 @@ mod tests {
     fn make_named_serializer() -> Serializer<Named> {
         let mut a = StructAdapter::new(
             Named::default,
-            named_is_default,
             Named::default,
             "test",
             "Named",

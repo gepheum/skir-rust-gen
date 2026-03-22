@@ -1268,8 +1268,95 @@ impl<T: 'static> TypeAdapter<Option<T>> for OptionalAdapter<T> {
 }
 
 // =============================================================================
-// skip_value – advance past one encoded value without decoding it
+// RecursiveAdapter
 // =============================================================================
+
+/// Serializer for hard-recursive optional fields (`Option<Box<T>>`-style).
+///
+/// The encoded "absent" sentinel is `[]` (JSON) / `0x_f6` wire byte (`246`),
+/// matching how Skir encodes a default struct.  This differs from
+/// [`OptionalAdapter`] which uses JSON `null` / wire `0xff`.
+pub(crate) struct RecursiveAdapter<T: 'static> {
+    other: Serializer<T>,
+}
+
+impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
+    fn is_default(&self, input: &Option<T>) -> bool {
+        match input {
+            None => true,
+            Some(v) => self.other.adapter().is_default(v),
+        }
+    }
+
+    fn to_json(&self, input: &Option<T>, eol_indent: Option<&str>, out: &mut String) {
+        match input {
+            None => out.push_str("[]"),
+            Some(v) => self.other.adapter().to_json(v, eol_indent, out),
+        }
+    }
+
+    fn from_json(
+        &self,
+        json: &serde_json::Value,
+        keep_unrecognized_values: bool,
+    ) -> Result<Option<T>, String> {
+        // Empty JSON array `[]` or number `0` → absent.
+        if let serde_json::Value::Array(arr) = json {
+            if arr.is_empty() {
+                return Ok(None);
+            }
+        }
+        if json == &serde_json::Value::Number(serde_json::Number::from(0)) {
+            return Ok(None);
+        }
+        self.other.adapter().from_json(json, keep_unrecognized_values).map(Some)
+    }
+
+    // None → wire 246 (= empty struct/array); Some(v) → delegate.
+    fn encode(&self, input: &Option<T>, out: &mut Vec<u8>) {
+        match input {
+            None => out.push(246),
+            Some(v) => self.other.adapter().encode(v, out),
+        }
+    }
+
+    // Wire 246 or 0 → absent; otherwise delegate.
+    fn decode(
+        &self,
+        input: &mut &[u8],
+        keep_unrecognized_values: bool,
+    ) -> Result<Option<T>, String> {
+        match input.first() {
+            Some(&246) | Some(&0) => {
+                *input = &input[1..];
+                Ok(None)
+            }
+            _ => self.other.adapter().decode(input, keep_unrecognized_values).map(Some),
+        }
+    }
+
+    fn type_descriptor(&self) -> TypeDescriptor {
+        self.other.adapter().type_descriptor()
+    }
+
+    fn clone_box(&self) -> Box<dyn TypeAdapter<Option<T>>> {
+        Box::new(RecursiveAdapter { other: self.other.clone() })
+    }
+}
+
+pub mod internal {
+    use super::{RecursiveAdapter, Serializer};
+
+    /// Returns a [`Serializer`] for hard-recursive optional fields.
+    ///
+    /// `None` encodes as `[]` (JSON) / wire `0xf6`; `Some(v)` delegates to
+    /// `other`.
+    pub fn recursive_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Option<T>> {
+        Serializer::new(RecursiveAdapter { other })
+    }
+}
+
+
 
 /// Advances `input` past one complete encoded value without decoding it.
 /// Used for removed fields/variants and for unrecognized data from a newer schema.

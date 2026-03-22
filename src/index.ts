@@ -1,7 +1,6 @@
+// TODO: serializer for recursive type
 // TODO: serializer
-// TODO: refactor TypeDescriptor so parse_from_json is a static method
 // TODO: format rust code
-// TODO: export Rust code at top-level in Skir client
 // TODO: comments
 // TODO: methods
 // TODO: constants
@@ -225,6 +224,33 @@ class RustSourceFileGenerator {
       this.push("}\n");
       this.push("}\n\n");
     }
+    const structModulePath = "crate::skirout::".concat(
+      this.moduleSpec.path.replace(/\.rs$/, "").replace(/\//g, "::"),
+    );
+    const structQualifiedName = struct.recordAncestors
+      .map((r) => r.name.text)
+      .join(".");
+    this.push(
+      `fn ${typeName}_typeAdapter() -> &'static crate::skir_client::internal::StructAdapter<${typeName}> {\n`,
+    );
+    this.push(
+      `static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::StructAdapter<${typeName}>> =\n`,
+    );
+    this.push(`std::sync::LazyLock::new(|| {\n`);
+    this.push(`crate::skir_client::internal::StructAdapter::new(\n`);
+    this.push(`${typeName}::default,\n`);
+    this.push(`${typeName}::default,\n`);
+    this.push(`"${structModulePath}",\n`);
+    this.push(`"${structQualifiedName}",\n`);
+    this.push(`"",\n`);
+    this.push(
+      `|x: &${typeName}| x._unrecognized.as_ref().map(|b| b.as_ref()),\n`,
+    );
+    this.push(`|x: &mut ${typeName}, u| x._unrecognized = u,\n`);
+    this.push(`)\n`);
+    this.push(`});\n`);
+    this.push(`&*ADAPTER\n`);
+    this.push("}\n\n");
   }
 
   private writeEnum(record: RecordLocation): void {
@@ -303,6 +329,50 @@ class RustSourceFileGenerator {
       this.push("}\n");
       this.push("}\n\n");
     }
+    const enumModulePath = "crate::skirout::".concat(
+      this.moduleSpec.path.replace(/\.rs$/, "").replace(/\//g, "::"),
+    );
+    const enumQualifiedName = record.recordAncestors
+      .map((r) => r.name.text)
+      .join(".");
+    this.push(
+      `fn ${typeName}_typeAdapter() -> &'static crate::skir_client::internal::EnumAdapter<${typeName}> {\n`,
+    );
+    this.push(
+      `  static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::EnumAdapter<${typeName}>> =\n`,
+    );
+    this.push(`    std::sync::LazyLock::new(|| {\n`);
+    this.push(`      crate::skir_client::internal::EnumAdapter::new(\n`);
+    this.push(`        |x: &${typeName}| match x {\n`);
+    this.push(`          ${typeName}::Unknown(_) => 0,\n`);
+    let kindOrdinal = 1;
+    for (const variant of record.record.fields) {
+      const variantName = convertCase(variant.name.text, "UpperCamel").concat(
+        variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
+      );
+      if (variant.type) {
+        this.push(
+          `          ${typeName}::${variantName}(_) => ${kindOrdinal},\n`,
+        );
+      } else {
+        this.push(`          ${typeName}::${variantName} => ${kindOrdinal},\n`);
+      }
+      kindOrdinal++;
+    }
+    this.push(`        },\n`);
+    this.push(`        ${typeName}::default,\n`);
+    this.push(`        |u| ${typeName}::Unknown(Some(u)),\n`);
+    this.push(
+      `        |x: &${typeName}| match x { ${typeName}::Unknown(Some(u)) => Some(u.as_ref()), _ => None },\n`,
+    );
+    this.push(`        "${enumModulePath}",\n`);
+    this.push(`        "${enumQualifiedName}",\n`);
+    this.push(`        "",\n`);
+    this.push(`        std::collections::HashSet::new(),\n`);
+    this.push(`      )\n`);
+    this.push(`    });\n`);
+    this.push(`  &*ADAPTER\n`);
+    this.push("}\n\n");
   }
 
   private writeMethod(method: Method): void {}

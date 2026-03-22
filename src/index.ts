@@ -1,4 +1,7 @@
 // TODO: make unreocgnized fields Option, instead of defining the Option in the client lib as a typedef
+// TODO: comments
+// TODO: methods
+// TODO: constants
 
 import {
   type CodeGenerator,
@@ -144,7 +147,7 @@ class RustSourceFileGenerator {
       }
     }
     this.push(
-      `  pub _unrecognized: crate::skir_client::unrecognized::UnrecognizedFields<${typeName}>,\n`,
+      `  pub _unrecognized: std::option::Option<crate::skir_client::unrecognized::UnrecognizedFields<${typeName}>>,\n`,
     );
     this.push("}\n\n");
 
@@ -230,7 +233,7 @@ class RustSourceFileGenerator {
     );
     this.push(`pub enum ${typeName} {\n`);
     this.push(
-      `  Unknown(crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>),\n`,
+      `  Unknown(std::option::Option<crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>>),\n`,
     );
     const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
       record.record.fields,

@@ -112,9 +112,7 @@ impl<T: 'static, V: 'static> FieldEntry<T> for TypedField<T, V> {
 /// Usage: call [`StructAdapter::new`], then [`StructAdapter::add_field`] /
 /// [`StructAdapter::add_removed_number`] for each field, then
 /// [`StructAdapter::into_serializer`] to finish.
-pub struct StructAdapter<T: 'static> {
-    default_instance: fn() -> T,
-    new_fn: fn() -> T,
+pub struct StructAdapter<T: 'static + Default> {
     get_unrecognized: fn(&T) -> Option<&UnrecognizedFieldsData<T>>,
     set_unrecognized: fn(&mut T, Option<Box<UnrecognizedFieldsData<T>>>),
     ordered_entries: Vec<Box<dyn FieldEntry<T>>>,
@@ -129,14 +127,12 @@ pub struct StructAdapter<T: 'static> {
     desc: Arc<StructDescriptor>,
 }
 
-impl<T: 'static> StructAdapter<T> {
+impl<T: 'static + Default> StructAdapter<T> {
     /// Creates a new `StructAdapter`.
     ///
     /// Call [`add_field`](Self::add_field) / [`add_removed_number`](Self::add_removed_number)
     /// for each field and removed number, then [`into_serializer`](Self::into_serializer).
     pub fn new(
-        default_instance: fn() -> T,
-        new_fn: fn() -> T,
         module_path: &str,
         qualified_name: &str,
         doc: &str,
@@ -154,8 +150,6 @@ impl<T: 'static> StructAdapter<T> {
                 HashSet::new(), // removed_numbers populated after add_removed_number calls
             ));
         StructAdapter {
-            default_instance,
-            new_fn,
             get_unrecognized,
             set_unrecognized,
             ordered_entries: Vec::new(),
@@ -367,11 +361,11 @@ impl<T: 'static> StructAdapter<T> {
         match v {
             serde_json::Value::Number(_) => {
                 // Dense default: 0 → return default instance.
-                Ok((self.default_instance)())
+                Ok(T::default())
             }
             serde_json::Value::Array(_) => self.from_dense_json(v, keep_unrecognized),
             serde_json::Value::Object(_) => self.from_readable_json(v),
-            _ => Ok((self.default_instance)()),
+            _ => Ok(T::default()),
         }
     }
 
@@ -381,7 +375,7 @@ impl<T: 'static> StructAdapter<T> {
         keep_unrecognized: bool,
     ) -> Result<T, String> {
         let items = arr.as_array().unwrap();
-        let mut t = (self.new_fn)();
+        let mut t = T::default();
         let recognized_count = self.slot_to_index.len();
         let total_items = items.len();
 
@@ -418,7 +412,7 @@ impl<T: 'static> StructAdapter<T> {
 
     fn from_readable_json(&self, obj: &serde_json::Value) -> Result<T, String> {
         let json_obj = obj.as_object().unwrap();
-        let mut t = (self.new_fn)();
+        let mut t = T::default();
         for (key, val) in json_obj {
             if let Some(&idx) = self.name_to_index.get(key.as_str()) {
                 self.ordered_entries[idx].set_entry_from_json(&mut t, val, false)?;
@@ -477,10 +471,10 @@ impl<T: 'static> StructAdapter<T> {
     ) -> Result<T, String> {
         let wire = read_u8(input)?;
         if wire == 0 || wire == 246 {
-            return Ok((self.default_instance)());
+            return Ok(T::default());
         }
 
-        let mut t = (self.new_fn)();
+        let mut t = T::default();
         let encoded_slot_count: usize = if wire == 250 {
             decode_number(input)? as usize
         } else {
@@ -537,9 +531,9 @@ impl<T: 'static> StructAdapter<T> {
 // StructAdapterWrapper – cheap Arc clone for TypeAdapter::clone_box
 // =============================================================================
 
-struct StructAdapterWrapper<T: 'static>(Arc<StructAdapter<T>>);
+struct StructAdapterWrapper<T: 'static + Default>(Arc<StructAdapter<T>>);
 
-impl<T: 'static> TypeAdapter<T> for StructAdapterWrapper<T>
+impl<T: 'static + Default> TypeAdapter<T> for StructAdapterWrapper<T>
 {
     fn is_default(&self, input: &T) -> bool {
         self.0.is_default_impl(input)
@@ -660,8 +654,6 @@ mod tests {
 
     fn make_point_serializer() -> Serializer<Point> {
         let mut a = StructAdapter::new(
-            Point::default,
-            Point::default,
             "test",
             "Point",
             "A 2-D integer point.",
@@ -906,8 +898,6 @@ mod tests {
 
     fn make_named_serializer() -> Serializer<Named> {
         let mut a = StructAdapter::new(
-            Named::default,
-            Named::default,
             "test",
             "Named",
             "",

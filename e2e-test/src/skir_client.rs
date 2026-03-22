@@ -40,6 +40,9 @@ pub mod internal {
     pub use super::keyed_vec::internal::Lookup;
 
     // enum_adapter::internal
+    pub use super::serializers::internal::recursive_serializer;
+
+    // enum_adapter::internal
     pub use super::enum_adapter::internal::EnumAdapter;
 
     // struct_adapter::internal

@@ -72,6 +72,18 @@ pub fn optional_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Optio
     Serializer::new(OptionalAdapter { other })
 }
 
+pub mod internal {
+    use super::{RecursiveAdapter, Serializer};
+
+    /// Returns a [`Serializer`] for hard-recursive optional fields.
+    ///
+    /// `None` encodes as `[]` (JSON) / wire `0xf6`; `Some(v)` delegates to
+    /// `other`.
+    pub fn recursive_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Option<T>> {
+        Serializer::new(RecursiveAdapter { other })
+    }
+}
+
 // =============================================================================
 // Binary I/O helpers
 // =============================================================================
@@ -1343,20 +1355,6 @@ impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
         Box::new(RecursiveAdapter { other: self.other.clone() })
     }
 }
-
-pub mod internal {
-    use super::{RecursiveAdapter, Serializer};
-
-    /// Returns a [`Serializer`] for hard-recursive optional fields.
-    ///
-    /// `None` encodes as `[]` (JSON) / wire `0xf6`; `Some(v)` delegates to
-    /// `other`.
-    pub fn recursive_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Option<T>> {
-        Serializer::new(RecursiveAdapter { other })
-    }
-}
-
-
 
 /// Advances `input` past one complete encoded value without decoding it.
 /// Used for removed fields/variants and for unrecognized data from a newer schema.

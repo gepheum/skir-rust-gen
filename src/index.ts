@@ -238,8 +238,6 @@ class RustSourceFileGenerator {
     );
     this.push(`std::sync::LazyLock::new(|| {\n`);
     this.push(`crate::skir_client::internal::StructAdapter::new(\n`);
-    this.push(`${typeName}::default,\n`);
-    this.push(`${typeName}::default,\n`);
     this.push(`"${structModulePath}",\n`);
     this.push(`"${structQualifiedName}",\n`);
     this.push(`"",\n`);
@@ -360,7 +358,6 @@ class RustSourceFileGenerator {
       kindOrdinal++;
     }
     this.push(`        },\n`);
-    this.push(`        ${typeName}::default,\n`);
     this.push(`        |u| ${typeName}::Unknown(Some(u)),\n`);
     this.push(
       `        |x: &${typeName}| match x { ${typeName}::Unknown(Some(u)) => Some(u.as_ref()), _ => None },\n`,

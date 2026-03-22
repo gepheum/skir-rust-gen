@@ -196,9 +196,8 @@ impl<T: 'static, V: 'static> VariantEntry<T> for WrapperEntry<T, V> {
 /// [`EnumAdapter::add_constant_variant`] / [`EnumAdapter::add_wrapper_variant`] /
 /// [`EnumAdapter::add_removed_number`], then call
 /// [`EnumAdapter::into_serializer`].
-pub struct EnumAdapter<T: 'static> {
+pub struct EnumAdapter<T: 'static + Default> {
     get_kind_ordinal: fn(&T) -> usize,
-    unknown_fn: fn() -> T,
     wrap_unrecognized: fn(Box<UnrecognizedVariantData<T>>) -> T,
     get_unrecognized: fn(&T) -> Option<&UnrecognizedVariantData<T>>,
     /// Maps variant number → how to handle it (removed / constant / wrapper).
@@ -213,11 +212,10 @@ pub struct EnumAdapter<T: 'static> {
     desc: Arc<EnumDescriptor>,
 }
 
-impl<T: 'static> EnumAdapter<T> {
+impl<T: 'static + Default> EnumAdapter<T> {
     /// Creates a new `EnumAdapter`.
     pub fn new(
         get_kind_ordinal: fn(&T) -> usize,
-        unknown_fn: fn() -> T,
         wrap_unrecognized: fn(Box<UnrecognizedVariantData<T>>) -> T,
         get_unrecognized: fn(&T) -> Option<&UnrecognizedVariantData<T>>,
         module_path: &str,
@@ -235,7 +233,6 @@ impl<T: 'static> EnumAdapter<T> {
         let kind_ordinal_to_entry = vec![None];
         EnumAdapter {
             get_kind_ordinal,
-            unknown_fn,
             wrap_unrecognized,
             get_unrecognized,
             number_to_entry: HashMap::new(),
@@ -386,7 +383,7 @@ impl<T: 'static> EnumAdapter<T> {
             }
             serde_json::Value::String(s) => {
                 match self.name_to_kind_ordinal.get(s.as_str()) {
-                    None => Ok((self.unknown_fn)()),
+                    None => Ok(T::default()),
                     Some(&ko) => {
                         if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
                             if entry.is_wrapper() {
@@ -397,7 +394,7 @@ impl<T: 'static> EnumAdapter<T> {
                             }
                             Ok(entry.instance())
                         } else {
-                            Ok((self.unknown_fn)())
+                            Ok(T::default())
                         }
                     }
                 }
@@ -405,7 +402,7 @@ impl<T: 'static> EnumAdapter<T> {
             serde_json::Value::Array(arr) if arr.len() == 2 => {
                 let num = arr[0].as_i64().unwrap_or(0) as i32;
                 match self.number_to_entry.get(&num) {
-                    None | Some(AnyEntry::Removed) => Ok((self.unknown_fn)()),
+                    None | Some(AnyEntry::Removed) => Ok(T::default()),
                     Some(AnyEntry::Constant(_)) => Err(format!(
                         "variant number {} is a constant, not a wrapper",
                         num
@@ -415,7 +412,7 @@ impl<T: 'static> EnumAdapter<T> {
                         if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
                             entry.wrap_from_json(&arr[1], keep)
                         } else {
-                            Ok((self.unknown_fn)())
+                            Ok(T::default())
                         }
                     }
                 }
@@ -424,7 +421,7 @@ impl<T: 'static> EnumAdapter<T> {
                 let name = obj.get("kind").and_then(|v| v.as_str()).unwrap_or("");
                 let val_json = obj.get("value").unwrap_or(&serde_json::Value::Null);
                 match self.name_to_kind_ordinal.get(name) {
-                    None => Ok((self.unknown_fn)()),
+                    None => Ok(T::default()),
                     Some(&ko) => {
                         if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
                             if !entry.is_wrapper() {
@@ -435,12 +432,12 @@ impl<T: 'static> EnumAdapter<T> {
                             }
                             entry.wrap_from_json(val_json, keep)
                         } else {
-                            Ok((self.unknown_fn)())
+                            Ok(T::default())
                         }
                     }
                 }
             }
-            _ => Ok((self.unknown_fn)()),
+            _ => Ok(T::default()),
         }
     }
 
@@ -466,19 +463,19 @@ impl<T: 'static> EnumAdapter<T> {
                     };
                     (self.wrap_unrecognized)(ud)
                 } else {
-                    (self.unknown_fn)()
+                    T::default()
                 }
             }
-            Some(AnyEntry::Removed) => (self.unknown_fn)(),
+            Some(AnyEntry::Removed) => T::default(),
             // A wrapper variant encountered in a constant context is an error;
             // return UNKNOWN.
-            Some(AnyEntry::Wrapper(_)) => (self.unknown_fn)(),
+            Some(AnyEntry::Wrapper(_)) => T::default(),
             Some(AnyEntry::Constant(ko)) => {
                 let ko = *ko;
                 if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
                     entry.instance()
                 } else {
-                    (self.unknown_fn)()
+                    T::default()
                 }
             }
         }
@@ -534,7 +531,7 @@ impl<T: 'static> EnumAdapter<T> {
         } else {
             // Unknown wire byte (e.g. 242..247, 249, 250, 255): skip nothing and
             // return UNKNOWN.
-            return Ok((self.unknown_fn)());
+            return Ok(T::default());
         };
 
         match self.number_to_entry.get(&number) {
@@ -544,12 +541,12 @@ impl<T: 'static> EnumAdapter<T> {
                     entry.wrap_decode(input, keep)
                 } else {
                     skip_value(input)?;
-                    Ok((self.unknown_fn)())
+                    Ok(T::default())
                 }
             }
             Some(AnyEntry::Removed) => {
                 skip_value(input)?;
-                Ok((self.unknown_fn)())
+                Ok(T::default())
             }
             // Not found or unexpectedly maps to a constant: treat as an
             // unrecognized wrapper number.
@@ -575,7 +572,7 @@ impl<T: 'static> EnumAdapter<T> {
                     )))
                 } else {
                     skip_value(input)?;
-                    Ok((self.unknown_fn)())
+                    Ok(T::default())
                 }
             }
         }
@@ -590,9 +587,9 @@ impl<T: 'static> EnumAdapter<T> {
 // EnumAdapterWrapper – cheap Arc clone for TypeAdapter::clone_box
 // =============================================================================
 
-struct EnumAdapterWrapper<T: 'static>(Arc<EnumAdapter<T>>);
+struct EnumAdapterWrapper<T: 'static + Default>(Arc<EnumAdapter<T>>);
 
-impl<T: 'static> TypeAdapter<T> for EnumAdapterWrapper<T> {
+impl<T: 'static + Default> TypeAdapter<T> for EnumAdapterWrapper<T> {
     fn is_default(&self, input: &T) -> bool {
         self.0.is_default_impl(input)
     }
@@ -737,7 +734,6 @@ mod tests {
     fn make_color_serializer() -> Serializer<Color> {
         let mut a = EnumAdapter::new(
             color_kind_ordinal,
-            color_unknown,
             color_wrap_unrecognized,
             color_get_unrecognized,
             "test",
@@ -941,7 +937,6 @@ mod tests {
     fn make_color_serializer_with_removed() -> Serializer<Color> {
         let mut a = EnumAdapter::new(
             color_kind_ordinal,
-            color_unknown,
             color_wrap_unrecognized,
             color_get_unrecognized,
             "test",

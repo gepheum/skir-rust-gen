@@ -6,7 +6,7 @@ import {
 import { getTypeName, Namer, toRustPathPrefix } from "./naming.js";
 
 /**
- * Transforms a type found in a `.skir` file into a Go type.
+ * Transforms a type found in a `.skir` file into a Rust type.
  */
 export class TypeSpeller {
   constructor(

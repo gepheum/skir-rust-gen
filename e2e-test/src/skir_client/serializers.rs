@@ -130,7 +130,7 @@ fn read_f64(input: &mut &[u8]) -> Result<f64, String> {
 }
 
 /// Decodes the body of a variable-length number given the already-consumed wire
-/// byte. Mirrors Go's `decodeNumberBody`.
+/// byte.
 pub(super) fn decode_number_body(wire: u8, input: &mut &[u8]) -> Result<i64, String> {
     match wire {
         0..=231 => Ok(wire as i64),
@@ -147,14 +147,13 @@ pub(super) fn decode_number_body(wire: u8, input: &mut &[u8]) -> Result<i64, Str
     }
 }
 
-/// Reads and decodes the next variable-length number. Mirrors Go's `decodeNumber`.
+/// Reads and decodes the next variable-length number.
 pub(super) fn decode_number(input: &mut &[u8]) -> Result<i64, String> {
     let wire = read_u8(input)?;
     decode_number_body(wire, input)
 }
 
-/// Encodes an `i32` using the skir variable-length wire format. Mirrors Go's
-/// `int32Adapter.encode` and TypeScript's `Int32Serializer.encode`.
+/// Encodes an `i32` using the skir variable-length wire format.
 fn encode_i32(v: i32, out: &mut Vec<u8>) {
     match v {
         i32::MIN..=-65537 => {
@@ -182,7 +181,6 @@ fn encode_i32(v: i32, out: &mut Vec<u8>) {
 }
 
 /// Encodes a non-negative length using the skir variable-length uint32 scheme.
-/// Mirrors Go's `encodeUint32` and TypeScript's `encodeUint32`.
 pub(super) fn encode_uint32(n: u32, out: &mut Vec<u8>) {
     match n {
         0..=231 => out.push(n as u8),
@@ -232,7 +230,7 @@ impl TypeAdapter<bool> for BoolAdapter {
                     Ok(n.as_f64().is_some_and(|f| f != 0.0))
                 }
             }
-            // Any string other than "0" is truthy, mirroring Go `string(sb) != "0"`.
+            // Any string other than "0" is truthy; "0" is the only falsy string.
             serde_json::Value::String(s) => Ok(s != "0"),
             _ => Ok(false),
         }
@@ -680,7 +678,7 @@ fn millis_to_iso8601(ms: i64) -> String {
 // =============================================================================
 
 /// Writes `s` as a JSON string literal to `out`, escaping `"`, `\`, and
-/// control characters. Mirrors Go's `writeJsonEscapedString`.
+/// control characters.
 fn write_json_escaped_string(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
@@ -709,7 +707,6 @@ const BASE64_ALPHABET: &[u8] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /// Encodes `bytes` to standard base64 with `=` padding.
-/// Mirrors Go's `base64.StdEncoding.EncodeToString`.
 fn encode_base64(bytes: &[u8]) -> String {
     let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
     for chunk in bytes.chunks(3) {
@@ -1397,7 +1394,7 @@ mod tests {
 
     #[test]
     fn from_json_string_zero_is_false() {
-        // Go: string(sb) != "0" — the string "0" is the only falsy string.
+        // The string "0" is the only falsy string value.
         assert_eq!(bool_serializer().from_json(r#""0""#, false).unwrap(), false);
     }
 

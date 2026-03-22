@@ -633,7 +633,7 @@ fn write_enum_record_json(e: &EnumDescriptor, indent: &str, out: &mut String) {
     out.push_str(",\n");
     out.push_str(&inner);
     out.push_str("\"variants\": [");
-    // Sort by number for deterministic output (mirrors Go behaviour).
+    // Sort by number for deterministic output.
     let mut sorted: Vec<&EnumVariant> = e.variants().iter().collect();
     sorted.sort_by_key(|v| v.number());
     for (i, v) in sorted.iter().enumerate() {
@@ -782,10 +782,10 @@ fn json_string(s: &str) -> String {
 /// Parses a [`TypeDescriptor`] from its JSON string representation, as
 /// produced by [`TypeDescriptor::as_json`].
 ///
-/// The format is the same two-pass self-describing JSON used by the Go
-/// `skir_client` library: a top-level `"type"` key holds the root type
-/// signature, and `"records"` holds all referenced struct/enum definitions
-/// so that forward references and mutual recursion are supported.
+/// The format uses a two-pass self-describing JSON: a top-level `"type"` key
+/// holds the root type signature, and `"records"` holds all referenced
+/// struct/enum definitions so that forward references and mutual recursion are
+/// supported.
 pub fn parse_type_descriptor_from_json(json_code: &str) -> Result<TypeDescriptor, String> {
     let root: serde_json::Value = serde_json::from_str(json_code)
         .map_err(|e| format!("parse_type_descriptor_from_json: {}", e))?;

@@ -57,8 +57,7 @@ impl<T: 'static> Serializer<T> {
     /// Deserialises a value from the Skir binary wire format.
     ///
     /// If `bytes` lacks the `"skir"` prefix the payload is treated as a UTF-8
-    /// JSON string and parsed via [`Self::from_json`], mirroring the Go
-    /// `FromBytes` fallback behaviour.
+    /// JSON string and parsed via [`Self::from_json`].
     ///
     /// Set `keep_unrecognized_values` to preserve fields/variants from a newer
     /// schema version.

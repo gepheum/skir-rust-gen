@@ -1,10 +1,12 @@
+pub mod internal {
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use super::reflection::{StructDescriptor, StructField, TypeDescriptor};
-use super::serializer::{Serializer, TypeAdapter};
-use super::serializers::{decode_number, encode_uint32, read_u8};
-use super::unrecognized::{UnrecognizedFieldsData, UnrecognizedFormat};
+use super::super::reflection::{StructDescriptor, StructField, TypeDescriptor};
+use super::super::serializer::{Serializer, TypeAdapter};
+use super::super::serializers::{decode_number, encode_uint32, read_u8};
+use super::super::unrecognized::{UnrecognizedFieldsData, UnrecognizedFormat};
 
 // =============================================================================
 // FieldEntry – type-erased per-field adapter
@@ -677,14 +679,19 @@ fn write_json_escaped_string(s: &str, out: &mut String) {
     out.push('"');
 }
 
+} // pub mod internal
+
 // =============================================================================
 // Tests
 // =============================================================================
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::internal::*;
+    use crate::skir_client::reflection::TypeDescriptor;
+    use crate::skir_client::serializer::Serializer;
     use crate::skir_client::serializers::{int32_serializer, string_serializer};
+    use crate::skir_client::unrecognized::UnrecognizedFieldsData;
 
     // -------------------------------------------------------------------------
     // A minimal two-field struct for testing

@@ -42,11 +42,13 @@ pub mod internal {
     // enum_adapter::internal
     pub use super::serializers::internal::recursive_serializer;
 
-    // enum_adapter::internal
-    pub use super::enum_adapter::internal::EnumAdapter;
-
     // struct_adapter::internal
     pub use super::struct_adapter::internal::StructAdapter;
+    pub use super::struct_adapter::internal::struct_serializer_from_static;
+
+    // enum_adapter::internal
+    pub use super::enum_adapter::internal::EnumAdapter;
+    pub use super::enum_adapter::internal::enum_serializer_from_static;
 
     // unrecognized::internal
     pub use super::unrecognized::internal::UnrecognizedFields;

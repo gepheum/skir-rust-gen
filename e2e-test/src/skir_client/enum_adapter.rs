@@ -195,7 +195,7 @@ impl<T: 'static, V: 'static> VariantEntry<T> for WrapperEntry<T, V> {
 /// Usage: call [`EnumAdapter::new`], then register variants with
 /// [`EnumAdapter::add_constant_variant`] / [`EnumAdapter::add_wrapper_variant`] /
 /// [`EnumAdapter::add_removed_number`], then call
-/// [`EnumAdapter::into_serializer`].
+/// [`EnumAdapter::finalize`].
 pub struct EnumAdapter<T: 'static + Default> {
     get_kind_ordinal: fn(&T) -> usize,
     wrap_unrecognized: fn(Box<UnrecognizedVariantData<T>>) -> T,
@@ -311,21 +311,15 @@ impl<T: 'static + Default> EnumAdapter<T> {
         self.kind_ordinal_to_entry[kind_ordinal] = Some(entry);
     }
 
-    fn finalize(&mut self) {
+    pub fn finalize(&mut self) {
         self.desc_variants.sort_by_key(|v| v.number());
         let variants = std::mem::take(&mut self.desc_variants);
         self.desc.set_variants(variants);
     }
 
-    /// Finalizes the adapter and returns a [`Serializer<T>`] backed by it.
-    pub fn into_serializer(mut self) -> Serializer<T> {
-        self.finalize();
-        Serializer::new(EnumAdapterWrapper(Arc::new(self)))
-    }
-
     /// Returns a reference to the pre-allocated [`EnumDescriptor`] for this
-    /// adapter. Valid even before [`into_serializer`](Self::into_serializer) is
-    /// called, which is necessary for recursive enum variant types.
+    /// adapter. Valid even before it is finalized, which is necessary for
+    /// recursive enum variant types.
     pub fn descriptor(&self) -> Arc<EnumDescriptor> {
         Arc::clone(&self.desc)
     }
@@ -583,19 +577,13 @@ impl<T: 'static + Default> EnumAdapter<T> {
     }
 }
 
-// =============================================================================
-// EnumAdapterWrapper – cheap Arc clone for TypeAdapter::clone_box
-// =============================================================================
-
-struct EnumAdapterWrapper<T: 'static + Default>(Arc<EnumAdapter<T>>);
-
-impl<T: 'static + Default> TypeAdapter<T> for EnumAdapterWrapper<T> {
+impl<T: 'static + Default> TypeAdapter<T> for EnumAdapter<T> {
     fn is_default(&self, input: &T) -> bool {
-        self.0.is_default_impl(input)
+        self.is_default_impl(input)
     }
 
     fn to_json(&self, input: &T, eol_indent: Option<&str>, out: &mut String) {
-        self.0.to_json_impl(input, eol_indent, out);
+        self.to_json_impl(input, eol_indent, out);
     }
 
     fn from_json(
@@ -603,24 +591,32 @@ impl<T: 'static + Default> TypeAdapter<T> for EnumAdapterWrapper<T> {
         json: &serde_json::Value,
         keep_unrecognized: bool,
     ) -> Result<T, String> {
-        self.0.from_json_impl(json, keep_unrecognized)
+        self.from_json_impl(json, keep_unrecognized)
     }
 
     fn encode(&self, input: &T, out: &mut Vec<u8>) {
-        self.0.encode_impl(input, out);
+        self.encode_impl(input, out);
     }
 
     fn decode(&self, input: &mut &[u8], keep_unrecognized: bool) -> Result<T, String> {
-        self.0.decode_impl(input, keep_unrecognized)
+        self.decode_impl(input, keep_unrecognized)
     }
 
     fn type_descriptor(&self) -> TypeDescriptor {
-        self.0.type_descriptor_impl()
+        self.type_descriptor_impl()
     }
 
     fn clone_box(&self) -> Box<dyn TypeAdapter<T>> {
-        Box::new(EnumAdapterWrapper(Arc::clone(&self.0)))
+        unreachable!("EnumAdapter is always accessed through a &'static reference")
     }
+}
+
+/// Creates a [`Serializer`] backed by the given `'static` [`EnumAdapter`]
+/// reference. For use only by generated code.
+pub fn enum_serializer_from_static<T: 'static + Default>(
+    adapter: &'static EnumAdapter<T>,
+) -> Serializer<T> {
+    Serializer::new_borrowed(adapter)
 }
 
 // =============================================================================
@@ -752,7 +748,8 @@ mod tests {
             wrap_int32,
             get_wrapped_value,
         );
-        a.into_serializer()
+        a.finalize();
+        crate::skir_client::internal::enum_serializer_from_static(Box::leak(Box::new(a)))
     }
 
     // -------------------------------------------------------------------------
@@ -946,7 +943,8 @@ mod tests {
         );
         a.add_constant_variant("RED", 1, 1, "", red_fn);
         a.add_removed_number(5); // variant 5 was removed
-        a.into_serializer()
+        a.finalize();
+        crate::skir_client::internal::enum_serializer_from_static(Box::leak(Box::new(a)))
     }
 
     #[test]

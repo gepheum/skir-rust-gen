@@ -111,7 +111,7 @@ impl<T: 'static, V: 'static> FieldEntry<T> for TypedField<T, V> {
 ///
 /// Usage: call [`StructAdapter::new`], then [`StructAdapter::add_field`] /
 /// [`StructAdapter::add_removed_number`] for each field, then
-/// [`StructAdapter::into_serializer`] to finish.
+/// [`StructAdapter::finalize`] to finish.
 pub struct StructAdapter<T: 'static + Default> {
     get_unrecognized: fn(&T) -> Option<&UnrecognizedFieldsData<T>>,
     set_unrecognized: fn(&mut T, Option<Box<UnrecognizedFieldsData<T>>>),
@@ -131,7 +131,7 @@ impl<T: 'static + Default> StructAdapter<T> {
     /// Creates a new `StructAdapter`.
     ///
     /// Call [`add_field`](Self::add_field) / [`add_removed_number`](Self::add_removed_number)
-    /// for each field and removed number, then [`into_serializer`](Self::into_serializer).
+    /// for each field and removed number, then [`finalize`](Self::finalize).
     pub fn new(
         module_path: &str,
         qualified_name: &str,
@@ -161,7 +161,7 @@ impl<T: 'static + Default> StructAdapter<T> {
         }
     }
 
-    /// Registers a struct field. Must be called before [`into_serializer`](Self::into_serializer).
+    /// Registers a struct field. Must be called before [`finalize`](Self::finalize).
     pub fn add_field<V: 'static>(
         &mut self,
         name: &str,
@@ -187,7 +187,7 @@ impl<T: 'static + Default> StructAdapter<T> {
     }
 
     /// Registers a field number that was removed from the schema.
-    /// Must be called before [`into_serializer`](Self::into_serializer).
+    /// Must be called before [`finalize`](Self::finalize).
     pub fn add_removed_number(&mut self, number: i32) {
         self.removed_numbers.insert(number);
         if number > self.max_number {
@@ -195,7 +195,7 @@ impl<T: 'static + Default> StructAdapter<T> {
         }
     }
 
-    fn finalize(&mut self) {
+    pub fn finalize(&mut self) {
         // Sort ordered_entries by field number.
         self.ordered_entries.sort_by_key(|e| e.entry_number());
 
@@ -227,18 +227,9 @@ impl<T: 'static + Default> StructAdapter<T> {
         self.desc.set_fields(fields);
     }
 
-    /// Finalizes the adapter and returns a [`Serializer<T>`] backed by it.
-    ///
-    /// Call [`add_field`](Self::add_field) / [`add_removed_number`](Self::add_removed_number)
-    /// before this.
-    pub fn into_serializer(mut self) -> Serializer<T> {
-        self.finalize();
-        Serializer::new(StructAdapterWrapper(Arc::new(self)))
-    }
-
     /// Returns a reference to the pre-allocated [`StructDescriptor`] for this
-    /// adapter. Valid even before [`into_serializer`](Self::into_serializer) is
-    /// called, which is necessary for recursive struct field types.
+    /// adapter. Valid even before it is finalized, which is necessary for
+    /// recursive struct field types.
     pub fn descriptor(&self) -> Arc<StructDescriptor> {
         Arc::clone(&self.desc)
     }
@@ -527,20 +518,13 @@ impl<T: 'static + Default> StructAdapter<T> {
     }
 }
 
-// =============================================================================
-// StructAdapterWrapper – cheap Arc clone for TypeAdapter::clone_box
-// =============================================================================
-
-struct StructAdapterWrapper<T: 'static + Default>(Arc<StructAdapter<T>>);
-
-impl<T: 'static + Default> TypeAdapter<T> for StructAdapterWrapper<T>
-{
+impl<T: 'static + Default> TypeAdapter<T> for StructAdapter<T> {
     fn is_default(&self, input: &T) -> bool {
-        self.0.is_default_impl(input)
+        self.is_default_impl(input)
     }
 
     fn to_json(&self, input: &T, eol_indent: Option<&str>, out: &mut String) {
-        self.0.to_json_impl(input, eol_indent, out);
+        self.to_json_impl(input, eol_indent, out);
     }
 
     fn from_json(
@@ -548,11 +532,11 @@ impl<T: 'static + Default> TypeAdapter<T> for StructAdapterWrapper<T>
         json: &serde_json::Value,
         keep_unrecognized_values: bool,
     ) -> Result<T, String> {
-        self.0.from_json_impl(json, keep_unrecognized_values)
+        self.from_json_impl(json, keep_unrecognized_values)
     }
 
     fn encode(&self, input: &T, out: &mut Vec<u8>) {
-        self.0.encode_impl(input, out);
+        self.encode_impl(input, out);
     }
 
     fn decode(
@@ -560,16 +544,24 @@ impl<T: 'static + Default> TypeAdapter<T> for StructAdapterWrapper<T>
         input: &mut &[u8],
         keep_unrecognized_values: bool,
     ) -> Result<T, String> {
-        self.0.decode_impl(input, keep_unrecognized_values)
+        self.decode_impl(input, keep_unrecognized_values)
     }
 
     fn type_descriptor(&self) -> TypeDescriptor {
-        self.0.type_descriptor_impl()
+        self.type_descriptor_impl()
     }
 
     fn clone_box(&self) -> Box<dyn TypeAdapter<T>> {
-        Box::new(StructAdapterWrapper(Arc::clone(&self.0)))
+        unreachable!("StructAdapter is always accessed through a &'static reference")
     }
+}
+
+/// Creates a [`Serializer`] backed by the given `'static` [`StructAdapter`]
+/// reference. For use only by generated code.
+pub fn struct_serializer_from_static<T: 'static + Default>(
+    adapter: &'static StructAdapter<T>,
+) -> Serializer<T> {
+    Serializer::new_borrowed(adapter)
 }
 
 // =============================================================================
@@ -662,7 +654,8 @@ mod tests {
         );
         a.add_field("x", 1, int32_serializer(), "x coordinate", get_x, set_x);
         a.add_field("y", 2, int32_serializer(), "y coordinate", get_y, set_y);
-        a.into_serializer()
+        a.finalize();
+        crate::skir_client::internal::struct_serializer_from_static(Box::leak(Box::new(a)))
     }
 
     // -------------------------------------------------------------------------
@@ -907,7 +900,8 @@ mod tests {
         // Field "name" at number 2 (number 1 was removed).
         a.add_removed_number(1);
         a.add_field("name", 2, string_serializer(), "", named_get_name, named_set_name);
-        a.into_serializer()
+        a.finalize();
+        crate::skir_client::internal::struct_serializer_from_static(Box::leak(Box::new(a)))
     }
 
     #[test]

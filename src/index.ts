@@ -1,7 +1,10 @@
-// TODO: serializer for recursive type
+// TODO: if I have a recursive fiedld, Equal() is not working...
+//   TODO: I think I may want to create my own Rec<>...
+// TODO: why does add_constant_variant expect an instance_fn????? It makes no sense... it might be in Go as well...
 // TODO: serializer
+// TODO: address all lints...
 // TODO: format rust code
-// TODO: comments
+// TODO: comments (in code, in runtime, )
 // TODO: methods
 // TODO: constants
 // TODO: CI
@@ -95,25 +98,30 @@ class RustSourceFileGenerator {
 
     const skirModule = this.moduleSpec.skirModule;
     if (skirModule) {
-      for (const record of skirModule.records) {
-        const { recordType } = record.record;
-        if (recordType === "struct") {
-          this.writeStruct(record);
-        } else {
-          this.writeEnum(record);
+      const { constants, methods, records } = skirModule;
+
+      if (records.length) {
+        for (const record of records) {
+          const { recordType } = record.record;
+          if (recordType === "struct") {
+            this.writeStruct(record);
+          } else {
+            this.writeEnum(record);
+          }
         }
+        this.writeInitializeModuleSerializersFn(records);
       }
 
-      if (skirModule.methods.length) {
+      if (methods.length) {
         this.pushSeparator("Methods");
-        for (const method of skirModule.methods) {
+        for (const method of methods) {
           this.writeMethod(method);
         }
       }
 
-      if (skirModule.constants.length) {
+      if (constants.length) {
         this.pushSeparator("Constants");
-        for (const constant of skirModule.constants) {
+        for (const constant of constants) {
           this.writeConstant(constant);
         }
       }
@@ -230,8 +238,9 @@ class RustSourceFileGenerator {
     const structQualifiedName = struct.recordAncestors
       .map((r) => r.name.text)
       .join(".");
+    this.push(`impl ${typeName} {\n`);
     this.push(
-      `fn ${typeName}_typeAdapter() -> &'static crate::skir_client::internal::StructAdapter<${typeName}> {\n`,
+      `pub fn _adapter() -> &'static crate::skir_client::internal::StructAdapter<${typeName}> {\n`,
     );
     this.push(
       `static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::StructAdapter<${typeName}>> =\n`,
@@ -248,6 +257,15 @@ class RustSourceFileGenerator {
     this.push(`)\n`);
     this.push(`});\n`);
     this.push(`&*ADAPTER\n`);
+    this.push("}\n");
+    this.push(
+      `pub fn serializer() -> crate::skir_client::Serializer<${typeName}> {\n`,
+    );
+    this.push(`initialize_module_serializers();\n`);
+    this.push(
+      `crate::skir_client::internal::struct_serializer_from_static(${typeName}::_adapter())\n`,
+    );
+    this.push("}\n");
     this.push("}\n\n");
   }
 
@@ -333,8 +351,9 @@ class RustSourceFileGenerator {
     const enumQualifiedName = record.recordAncestors
       .map((r) => r.name.text)
       .join(".");
+    this.push(`impl ${typeName} {\n`);
     this.push(
-      `fn ${typeName}_typeAdapter() -> &'static crate::skir_client::internal::EnumAdapter<${typeName}> {\n`,
+      `pub fn _adapter() -> &'static crate::skir_client::internal::EnumAdapter<${typeName}> {\n`,
     );
     this.push(
       `  static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::EnumAdapter<${typeName}>> =\n`,
@@ -369,6 +388,108 @@ class RustSourceFileGenerator {
     this.push(`      )\n`);
     this.push(`    });\n`);
     this.push(`  &*ADAPTER\n`);
+    this.push("}\n");
+    this.push(
+      `pub fn serializer() -> crate::skir_client::Serializer<${typeName}> {\n`,
+    );
+    this.push(`initialize_module_serializers();\n`);
+    this.push(
+      `crate::skir_client::internal::enum_serializer_from_static(${typeName}::_adapter())\n`,
+    );
+    this.push("}\n");
+    this.push("}\n\n");
+  }
+
+  private writeInitializeModuleSerializersFn(
+    records: readonly RecordLocation[],
+  ): void {
+    const { typeSpeller } = this;
+    this.pushSeparator("initialize_module_serializers()");
+    this.push("fn initialize_module_serializers() {\n");
+    this.push("static INIT: std::sync::LazyLock<()> =\n");
+    this.push("std::sync::LazyLock::new(|| {\n");
+    for (const record of records) {
+      const typeName = getTypeName(record);
+      if (record.record.recordType === "struct") {
+        this.push("unsafe {\n");
+        this.push(
+          `let a: *mut crate::skir_client::internal::StructAdapter<${typeName}> = ${typeName}::_adapter() as *const _ as *mut _;\n`,
+        );
+        for (const removedNumber of record.record.removedNumbers) {
+          this.push(`(*a).add_removed_number(${removedNumber});\n`);
+        }
+        for (const field of record.record.fields) {
+          const fieldName = toRustFieldName(field.name.text);
+          let serializerExpr = typeSpeller.getSerializerExpression(
+            field.type!,
+            "init",
+          );
+          if (field.isRecursive === "hard") {
+            serializerExpr = `crate::skir_client::internal::recursive_serializer(${serializerExpr})`;
+          }
+          const getter =
+            field.isRecursive === "hard"
+              ? `|x: &${typeName}| x._${field.name.text}_rec.as_deref().cloned()`
+              : `|x: &${typeName}| x.${fieldName}.clone()`;
+          const setter =
+            field.isRecursive === "hard"
+              ? `|x: &mut ${typeName}, v| x._${field.name.text}_rec = v.map(Box::new)`
+              : `|x: &mut ${typeName}, v| x.${fieldName} = v`;
+          this.push(
+            `(*a).add_field("${field.name.text}", ${field.number}, ${serializerExpr}, "", ${getter}, ${setter});\n`,
+          );
+        }
+        this.push("(*a).finalize();\n");
+        this.push("}\n");
+      } else {
+        const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
+          record.record.fields,
+        );
+        this.push("unsafe {\n");
+        this.push(
+          `let a: *mut crate::skir_client::internal::EnumAdapter<${typeName}> = ${typeName}::_adapter() as *const _ as *mut _;\n`,
+        );
+        for (const removedNumber of record.record.removedNumbers) {
+          this.push(`(*a).add_removed_number(${removedNumber});\n`);
+        }
+        let kindOrdinal = 1;
+        for (const variant of record.record.fields) {
+          const variantName = convertCase(
+            variant.name.text,
+            "UpperCamel",
+          ).concat(
+            variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
+          );
+          if (variant.type) {
+            const serializerExpr = typeSpeller.getSerializerExpression(
+              variant.type,
+              "init",
+            );
+            let wrapFn: string;
+            let getValueFn: string;
+            if (doesWrapperVariantNeedBoxing(variant.type)) {
+              wrapFn = `|v| ${typeName}::${variantName}(Box::new(v))`;
+              getValueFn = `|x| match x { ${typeName}::${variantName}(b) => b.as_ref(), _ => unreachable!() }`;
+            } else {
+              wrapFn = `|v| ${typeName}::${variantName}(v)`;
+              getValueFn = `|x| match x { ${typeName}::${variantName}(v) => v, _ => unreachable!() }`;
+            }
+            this.push(
+              `(*a).add_wrapper_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, ${serializerExpr}, "", ${wrapFn}, ${getValueFn});\n`,
+            );
+          } else {
+            this.push(
+              `(*a).add_constant_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, "", || ${typeName}::${variantName});\n`,
+            );
+          }
+          kindOrdinal++;
+        }
+        this.push("(*a).finalize();\n");
+        this.push("}\n");
+      }
+    }
+    this.push("});\n");
+    this.push("let _ = *INIT;\n");
     this.push("}\n\n");
   }
 
@@ -527,7 +648,7 @@ function toRustStringLiteral(input: string): string {
   return `"${escaped}"`;
 }
 
-function tryGetGoLiteral(constant: Constant): string | null {
+function tryGetRustLiteral(constant: Constant): string | null {
   const type = constant.type!;
   if (type.kind !== "primitive") {
     return null;

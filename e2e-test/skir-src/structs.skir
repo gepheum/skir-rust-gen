@@ -127,6 +127,10 @@ struct RecB {
   a_list: [RecA?]?;
 }
 
+enum EnumWithRecStruct {
+  r: RecA;
+}
+
 struct Name {
   struct Name1 {}
   struct Name2 {

@@ -336,7 +336,7 @@ impl StructDescriptor {
         self.fields.get().expect("StructDescriptor fields not yet initialized")
     }
 
-    /// Called once by [`struct_adapter::StructAdapter::into_serializer`] after all
+    /// Called once by [`struct_adapter::StructAdapter::finalize`] after all
     /// fields have been registered. Silently ignored if called more than once.
     pub(super) fn set_fields(&self, fields: Vec<StructField>) {
         self.fields.set(fields).ok();
@@ -433,7 +433,7 @@ impl EnumDescriptor {
         self.variants.get().expect("EnumDescriptor variants not yet initialized")
     }
 
-    /// Called once by [`enum_adapter::EnumAdapter::into_serializer`] after all
+    /// Called once by [`enum_adapter::EnumAdapter::finalize`] after all
     /// variants have been registered. Silently ignored if called more than once.
     pub(super) fn set_variants(&self, variants: Vec<EnumVariant>) {
         self.variants.set(variants).ok();

@@ -112,7 +112,7 @@ export class TypeSpeller {
     return getTypeName(record);
   }
 
-  getSerializerExpression(type: ResolvedType): string {
+  getSerializerExpression(type: ResolvedType, context: "init" | null): string {
     switch (type.kind) {
       case "primitive": {
         switch (type.primitive) {
@@ -140,26 +140,36 @@ export class TypeSpeller {
       }
       case "array": {
         const itemType = this.getRustType(type.item);
-        const itemSerializer = this.getSerializerExpression(type.item);
+        const itemSerializer = this.getSerializerExpression(type.item, context);
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
           const suffix = getRustKeySpecSuffix(type.key);
-          return `crate::skir_client::keyed_array_serializer<${itemType}${suffix}>(
-              ${itemSerializer},
-            )`;
+          return `crate::skir_client::keyed_array_serializer::<${itemType}${suffix}>(${itemSerializer})`;
         } else {
-          return `crate::skir_client::array_serializer(
-              ${itemSerializer},
-            )`;
+          return `crate::skir_client::array_serializer(${itemSerializer})`;
         }
       }
       case "optional": {
-        const otherSerializer = this.getSerializerExpression(type.other);
-        return `crate::skir_client::optional_serializer(
-            ${otherSerializer},
-          )`;
+        const otherSerializer = this.getSerializerExpression(
+          type.other,
+          context,
+        );
+        return `crate::skir_client::optional_serializer(${otherSerializer})`;
       }
       case "record": {
-        return this.getRustType(type).concat("::serializer()");
+        const recordLocation = this.recordMap.get(type.key)!;
+        const rustType = this.getRustType(type);
+        if (
+          context === "init" &&
+          recordLocation.modulePath === this.namer.skirModule?.path
+        ) {
+          const fnName =
+            recordLocation.record.recordType === "struct"
+              ? "struct_serializer_from_static"
+              : "enum_serializer_from_static";
+          return `crate::skir_client::internal::${fnName}(${rustType}::_adapter())`;
+        } else {
+          return rustType.concat("::serializer()");
+        }
       }
     }
   }

@@ -3,11 +3,11 @@ use std::vec::Vec;
 
 /// Stores unrecognized fields encountered while deserializing a struct of type
 /// `T`.
-pub type UnrecognizedFields<T> = Option<UnrecognizedFieldsData<T>>;
+pub type UnrecognizedFields<T> = Box<UnrecognizedFieldsData<T>>;
 
 /// Stores unrecognized fields encountered while deserializing an enum of type
 /// `T`.
-pub type UnrecognizedVariant<T> = Option<UnrecognizedVariantData<T>>;
+pub type UnrecognizedVariant<T> = Box<UnrecognizedVariantData<T>>;
 
 /// Internal data owned by `UnrecognizedFields<T>` instances.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -25,8 +25,8 @@ pub struct UnrecognizedVariantData<T> {
     pub(super) format: UnrecognizedFormat,
     /// Wire number of the unrecognized variant.
     pub(super) number: i32,
-    /// Present if the variant wraps a value; `None` if it is a plain number.
-    pub(super) value: Option<Box<Vec<u8>>>,
+    /// Empty if the unrecognized variant is a constant variant (number).
+    pub(super) value: Vec<u8>,
     _phantom: PhantomData<T>,
 }
 

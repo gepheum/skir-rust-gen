@@ -60,12 +60,7 @@ export class TypeSpeller {
     switch (type.kind) {
       case "record": {
         const rustType = this.getRustType(type);
-        const record = this.recordMap.get(type.key)!;
-        if (record.record.recordType === "enum") {
-          return `${rustType}::Unknown`;
-        } else {
-          return `${rustType}::default()`;
-        }
+        return `${rustType}::default()`;
       }
       case "array": {
         return "std::vec::Vec::new()";

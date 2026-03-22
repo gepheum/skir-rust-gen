@@ -197,18 +197,13 @@ class RustSourceFileGenerator {
     );
     this.push(`pub enum ${typeName} {\n`);
     this.push(
-      `  UnknownOrUnrecognized(crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>),\n`,
+      `  Unknown(crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>),\n`,
     );
-    this.push("}\n\n");
-
-    this.push(`impl ${typeName} {\n`);
-    this.push(`  pub const Unknown: ${typeName} =\n`);
-    this.push(`    ${typeName}::UnknownOrUnrecognized(None);\n`);
     this.push("}\n\n");
 
     this.push(`impl std::default::Default for ${typeName} {\n`);
     this.push(`  fn default() -> Self {\n`);
-    this.push(`    Self::Unknown\n`);
+    this.push(`    ${typeName}::Unknown(None)\n`);
     this.push("  }\n");
     this.push("}\n\n");
   }

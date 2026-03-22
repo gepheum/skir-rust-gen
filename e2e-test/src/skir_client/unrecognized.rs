@@ -5,14 +5,14 @@ use std::vec::Vec;
 /// `T`. The type parameter is a phantom: it is never stored, but it prevents
 /// accidentally assigning an `UnrecognizedFields<Foo>` to an
 /// `UnrecognizedFields<Bar>`.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct UnrecognizedFields<T> {
     pub(super) data: Option<Box<UnrecognizedFieldsData>>,
     _phantom: PhantomData<T>,
 }
 
 impl<T> UnrecognizedFields<T> {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             data: None,
             _phantom: PhantomData,
@@ -21,7 +21,7 @@ impl<T> UnrecognizedFields<T> {
 }
 
 /// Internal data shared by `UnrecognizedFields<T>` instances.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct UnrecognizedFieldsData {
     pub format: UnrecognizedFormat,
     pub array_len: u32,
@@ -54,7 +54,7 @@ impl UnrecognizedVariant {
 
     /// Sets `value` to a fresh empty buffer and returns a mutable reference to
     /// it, mirroring the C++ `emplace_value()` method.
-    pub fn emplace_value(&mut self) -> &mut Vec<u8> {
+    pub(super) fn emplace_value(&mut self) -> &mut Vec<u8> {
         self.value = Some(Box::new(Vec::new()));
         self.value.as_mut().unwrap()
     }

@@ -128,6 +128,9 @@ class RustSourceFileGenerator {
         this.push(`  pub ${fieldName}: ${fieldType},\n`);
       }
     }
+    this.push(
+      `  pub _unrecognized: crate::skir_client::unrecognized::UnrecognizedFields<${typeName}>,\n`,
+    );
     this.push("}\n\n");
 
     // impl block: defaultRef() + getters for hard-recursive fields
@@ -139,18 +142,8 @@ class RustSourceFileGenerator {
     // defaultRef()
     this.push(`  pub fn defaultRef() -> &'static ${typeName} {\n`);
     this.push(
-      `    static D: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(|| ${typeName} {\n`,
+      `    static D: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(${typeName}::default);\n`,
     );
-    for (const field of struct.record.fields) {
-      if (field.isRecursive === "hard") {
-        this.push(`      _${field.name.text}_rec: None,\n`);
-      } else {
-        const fieldName = toStructFieldName(field.name.text);
-        const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
-        this.push(`      ${fieldName}: ${defaultExpr},\n`);
-      }
-    }
-    this.push("    });\n");
     this.push("    &D\n");
     this.push("  }\n");
 
@@ -171,7 +164,20 @@ class RustSourceFileGenerator {
     // Default trait implementation
     this.push(`impl std::default::Default for ${typeName} {\n`);
     this.push(`  fn default() -> Self {\n`);
-    this.push(`    ${typeName}::defaultRef().clone()\n`);
+    this.push(`    ${typeName} {\n`);
+    for (const field of struct.record.fields) {
+      if (field.isRecursive === "hard") {
+        this.push(`      _${field.name.text}_rec: None,\n`);
+      } else {
+        const fieldName = toStructFieldName(field.name.text);
+        const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
+        this.push(`      ${fieldName}: ${defaultExpr},\n`);
+      }
+    }
+    this.push(
+      `      _unrecognized: crate::skir_client::unrecognized::UnrecognizedFields::new(),\n`,
+    );
+    this.push("    }\n");
     this.push("  }\n");
     this.push("}\n\n");
   }

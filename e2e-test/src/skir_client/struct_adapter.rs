@@ -6,7 +6,7 @@ use std::sync::Arc;
 use super::super::reflection::{StructDescriptor, StructField, TypeDescriptor};
 use super::super::serializer::{Serializer, TypeAdapter};
 use super::super::serializers::{decode_number, encode_uint32, read_u8, skip_value};
-use super::super::unrecognized::{UnrecognizedFieldsData, UnrecognizedFormat};
+use super::super::unrecognized::internal::{UnrecognizedFieldsData, UnrecognizedFormat};
 
 // =============================================================================
 // FieldEntry – type-erased per-field adapter
@@ -618,7 +618,7 @@ mod tests {
     use crate::skir_client::reflection::TypeDescriptor;
     use crate::skir_client::serializer::Serializer;
     use crate::skir_client::serializers::{int32_serializer, string_serializer};
-    use crate::skir_client::unrecognized::UnrecognizedFieldsData;
+    use crate::skir_client::unrecognized::internal::UnrecognizedFieldsData;
 
     // -------------------------------------------------------------------------
     // A minimal two-field struct for testing

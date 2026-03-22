@@ -10,7 +10,7 @@ use super::super::serializer::{Serializer, TypeAdapter};
 use super::super::serializers::{
     decode_number, decode_number_body, encode_uint32, read_u8, skip_value,
 };
-use super::super::unrecognized::{UnrecognizedFormat, UnrecognizedVariantData};
+use super::super::unrecognized::internal::{UnrecognizedFormat, UnrecognizedVariantData};
 
 // =============================================================================
 // AnyEntry – maps a variant number to how it should be handled
@@ -662,7 +662,7 @@ mod tests {
     use crate::skir_client::reflection::TypeDescriptor;
     use crate::skir_client::serializer::Serializer;
     use crate::skir_client::serializers::int32_serializer;
-    use crate::skir_client::unrecognized::{UnrecognizedFormat, UnrecognizedVariantData};
+    use crate::skir_client::unrecognized::internal::{UnrecognizedFormat, UnrecognizedVariantData};
 
     // -------------------------------------------------------------------------
     // A minimal test enum

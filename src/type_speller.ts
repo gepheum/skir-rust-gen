@@ -30,7 +30,7 @@ export class TypeSpeller {
         const itemType = this.getRustType(type.item);
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
           const suffix = getRustKeySpecSuffix(type.key);
-          return `crate::skir_client::keyed_vec::KeyedVec<${itemType}${suffix}>`;
+          return `crate::keyed_vec::KeyedVec<${itemType}${suffix}>`;
         } else {
           return `${this.namer.vec}<${itemType}>`;
         }
@@ -73,7 +73,7 @@ export class TypeSpeller {
       }
       case "array": {
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
-          return "crate::skir_client::keyed_vec::KeyedVec::default()";
+          return "crate::skir_client::KeyedVec::default()";
         } else {
           return this.namer.vec.concat("::default()");
         }
@@ -117,23 +117,23 @@ export class TypeSpeller {
       case "primitive": {
         switch (type.primitive) {
           case "bool":
-            return "crate::skir_client::serializers::bool_serializer()";
+            return "crate::skir_client::bool_serializer()";
           case "int32":
-            return "crate::skir_client::serializers::int32_serializer()";
+            return "crate::skir_client::int32_serializer()";
           case "int64":
-            return "crate::skir_client::serializers::int64_serializer()";
+            return "crate::skir_client::int64_serializer()";
           case "hash64":
-            return "crate::skir_client::serializers::hash64_serializer()";
+            return "crate::skir_client::hash64_serializer()";
           case "float32":
-            return "crate::skir_client::serializers::float32_serializer()";
+            return "crate::skir_client::float32_serializer()";
           case "float64":
-            return "crate::skir_client::serializers::float64_serializer()";
+            return "crate::skir_client::float64_serializer()";
           case "timestamp":
-            return "crate::skir_client::serializers::timestamp_serializer()";
+            return "crate::skir_client::timestamp_serializer()";
           case "string":
-            return "crate::skir_client::serializers::string_serializer()";
+            return "crate::skir_client::string_serializer()";
           case "bytes":
-            return "crate::skir_client::serializers::bytes_serializer()";
+            return "crate::skir_client::bytes_serializer()";
         }
         const _: never = type.primitive;
         throw TypeError();
@@ -143,18 +143,18 @@ export class TypeSpeller {
         const itemSerializer = this.getSerializerExpression(type.item);
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
           const suffix = getRustKeySpecSuffix(type.key);
-          return `crate::skir_client::serializers::keyed_array_serializer<${itemType}${suffix}>(
+          return `crate::skir_client::keyed_array_serializer<${itemType}${suffix}>(
               ${itemSerializer},
             )`;
         } else {
-          return `crate::skir_client::serializers::array_serializer(
+          return `crate::skir_client::array_serializer(
               ${itemSerializer},
             )`;
         }
       }
       case "optional": {
         const otherSerializer = this.getSerializerExpression(type.other);
-        return `crate::skir_client::serializers::optional_serializer(
+        return `crate::skir_client::optional_serializer(
             ${otherSerializer},
           )`;
       }

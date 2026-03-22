@@ -151,7 +151,7 @@ class RustSourceFileGenerator {
       }
     }
     this.push(
-      `  pub _unrecognized: ${namer.option}<crate::skir_client::unrecognized::UnrecognizedFields<${typeName}>>,\n`,
+      `  pub _unrecognized: ${namer.option}<crate::skir_client::internal::UnrecognizedFields<${typeName}>>,\n`,
     );
     this.push("}\n\n");
 
@@ -210,12 +210,12 @@ class RustSourceFileGenerator {
     )) {
       this.push(`pub struct ${keySpec.rustSpecName};\n\n`);
       this.push(
-        `impl crate::skir_client::keyed_vec::KeyedVecSpec for ${keySpec.rustSpecName} {\n`,
+        `impl crate::keyed_vec::KeyedVecSpec for ${keySpec.rustSpecName} {\n`,
       );
       this.push(`type Item = ${typeName};\n`);
       this.push(`type StorageKey = ${keySpec.rustKeyType};\n`);
       this.push(
-        `type Lookup = crate::skir_client::keyed_vec::internal::${keySpec.lookupImpl};\n`,
+        `type Lookup = crate::keyed_vec::internal::${keySpec.lookupImpl};\n`,
       );
       this.push(`fn get_key(item: &${typeName}) -> ${keySpec.rustKeyType} {\n`);
       this.push(`  ${keySpec.rustKeyExpr}\n`);
@@ -238,7 +238,7 @@ class RustSourceFileGenerator {
     );
     this.push(`pub enum ${typeName} {\n`);
     this.push(
-      `  Unknown(${namer.option}<crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>>),\n`,
+      `  Unknown(${namer.option}<crate::skir_client::internal::UnrecognizedVariant<${typeName}>>),\n`,
     );
     const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
       record.record.fields,

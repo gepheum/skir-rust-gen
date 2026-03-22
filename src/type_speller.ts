@@ -143,23 +143,20 @@ export class TypeSpeller {
         const itemSerializer = this.getSerializerExpression(type.item);
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
           const suffix = getRustKeySpecSuffix(type.key);
-          return (
-            `crate::skir_client::serializers::keyed_array_serializer<${itemType}${suffix}>(
+          return `crate::skir_client::serializers::keyed_array_serializer<${itemType}${suffix}>(
               ${itemSerializer},
-            )`);
+            )`;
         } else {
-          return (
-            `crate::skir_client::serializers::array_serializer(
+          return `crate::skir_client::serializers::array_serializer(
               ${itemSerializer},
-            )`);
+            )`;
         }
       }
       case "optional": {
         const otherSerializer = this.getSerializerExpression(type.other);
-        return (
-          `crate::skir_client::serializers::optional_serializer(
+        return `crate::skir_client::serializers::optional_serializer(
             ${otherSerializer},
-          )`);
+          )`;
       }
       case "record": {
         return this.getRustType(type).concat("::serializer()");
@@ -181,7 +178,7 @@ export function skirDefaultIsRustDefault(type: ResolvedType): boolean {
         case "timestamp":
           return false;
         default:
-          return false;
+          return true;
       }
     }
   }

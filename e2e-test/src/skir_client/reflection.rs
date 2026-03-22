@@ -127,6 +127,15 @@ pub struct StructField {
 }
 
 impl StructField {
+    pub(super) fn new(
+        name: String,
+        number: i32,
+        field_type: TypeDescriptor,
+        doc: String,
+    ) -> Self {
+        StructField { name, number, field_type, doc }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -262,7 +271,7 @@ pub struct StructDescriptor {
 }
 
 impl StructDescriptor {
-    fn new(
+    pub(super) fn new(
         module_path: String,
         qualified_name: String,
         doc: String,
@@ -299,6 +308,12 @@ impl StructDescriptor {
     }
     pub fn fields(&self) -> &[StructField] {
         self.fields.get().expect("StructDescriptor fields not yet initialized")
+    }
+
+    /// Called once by [`struct_adapter::StructAdapter::into_serializer`] after all
+    /// fields have been registered. Silently ignored if called more than once.
+    pub(super) fn set_fields(&self, fields: Vec<StructField>) {
+        self.fields.set(fields).ok();
     }
 
     fn record_id(&self) -> String {

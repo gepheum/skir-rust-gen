@@ -24,7 +24,7 @@ pub fn int64_serializer() -> Serializer<i64> {
 }
 
 /// Returns a [`Serializer`] for `u64` hash values.
-pub fn uint64_serializer() -> Serializer<u64> {
+pub fn hash64_serializer() -> Serializer<u64> {
     Serializer::new(Hash64Adapter)
 }
 
@@ -76,7 +76,7 @@ pub fn optional_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Optio
 // Binary I/O helpers
 // =============================================================================
 
-fn read_u8(input: &mut &[u8]) -> Result<u8, String> {
+pub(super) fn read_u8(input: &mut &[u8]) -> Result<u8, String> {
     match input.first() {
         Some(&b) => {
             *input = &input[1..];
@@ -148,7 +148,7 @@ fn decode_number_body(wire: u8, input: &mut &[u8]) -> Result<i64, String> {
 }
 
 /// Reads and decodes the next variable-length number. Mirrors Go's `decodeNumber`.
-fn decode_number(input: &mut &[u8]) -> Result<i64, String> {
+pub(super) fn decode_number(input: &mut &[u8]) -> Result<i64, String> {
     let wire = read_u8(input)?;
     decode_number_body(wire, input)
 }
@@ -183,7 +183,7 @@ fn encode_i32(v: i32, out: &mut Vec<u8>) {
 
 /// Encodes a non-negative length using the skir variable-length uint32 scheme.
 /// Mirrors Go's `encodeUint32` and TypeScript's `encodeUint32`.
-fn encode_uint32(n: u32, out: &mut Vec<u8>) {
+pub(super) fn encode_uint32(n: u32, out: &mut Vec<u8>) {
     match n {
         0..=231 => out.push(n as u8),
         232..=65535 => {
@@ -1582,18 +1582,18 @@ mod tests {
 
     #[test]
     fn uint64_to_json_safe_integer() {
-        assert_eq!(uint64_serializer().to_json(&0_u64, false), "0");
-        assert_eq!(uint64_serializer().to_json(&9_007_199_254_740_991_u64, false), "9007199254740991");
+        assert_eq!(hash64_serializer().to_json(&0_u64, false), "0");
+        assert_eq!(hash64_serializer().to_json(&9_007_199_254_740_991_u64, false), "9007199254740991");
     }
 
     #[test]
     fn uint64_to_json_large_value_is_quoted() {
         assert_eq!(
-            uint64_serializer().to_json(&9_007_199_254_740_992_u64, false),
+            hash64_serializer().to_json(&9_007_199_254_740_992_u64, false),
             r#""9007199254740992""#,
         );
         assert_eq!(
-            uint64_serializer().to_json(&u64::MAX, false),
+            hash64_serializer().to_json(&u64::MAX, false),
             format!("\"{}\"", u64::MAX),
         );
     }
@@ -1602,47 +1602,47 @@ mod tests {
 
     #[test]
     fn uint64_from_json_integer() {
-        assert_eq!(uint64_serializer().from_json("42", false).unwrap(), 42_u64);
+        assert_eq!(hash64_serializer().from_json("42", false).unwrap(), 42_u64);
     }
 
     #[test]
     fn uint64_from_json_negative_number_is_zero() {
         // negative float → clamped to 0
-        assert_eq!(uint64_serializer().from_json("-1.0", false).unwrap(), 0_u64);
+        assert_eq!(hash64_serializer().from_json("-1.0", false).unwrap(), 0_u64);
     }
 
     #[test]
     fn uint64_from_json_quoted_large() {
         assert_eq!(
-            uint64_serializer().from_json(r#""9007199254740992""#, false).unwrap(),
+            hash64_serializer().from_json(r#""9007199254740992""#, false).unwrap(),
             9_007_199_254_740_992_u64,
         );
     }
 
     #[test]
     fn uint64_from_json_null_is_zero() {
-        assert_eq!(uint64_serializer().from_json("null", false).unwrap(), 0_u64);
+        assert_eq!(hash64_serializer().from_json("null", false).unwrap(), 0_u64);
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
 
     #[test]
     fn uint64_encode_single_byte_range() {
-        assert_eq!(uint64_serializer().to_bytes(&0_u64), b"skir\x00");
-        assert_eq!(uint64_serializer().to_bytes(&231_u64), b"skir\xe7");
+        assert_eq!(hash64_serializer().to_bytes(&0_u64), b"skir\x00");
+        assert_eq!(hash64_serializer().to_bytes(&231_u64), b"skir\xe7");
     }
 
     #[test]
     fn uint64_encode_u16_range() {
         // 232..65535 → wire 232 + u16 LE
-        let bytes = uint64_serializer().to_bytes(&1000_u64);
+        let bytes = hash64_serializer().to_bytes(&1000_u64);
         assert_eq!(&bytes[4..], &[232, 232, 3]);
     }
 
     #[test]
     fn uint64_encode_u32_range() {
         // 65536..4294967295 → wire 233 + u32 LE
-        let bytes = uint64_serializer().to_bytes(&65536_u64);
+        let bytes = hash64_serializer().to_bytes(&65536_u64);
         assert_eq!(&bytes[4..], &[233, 0, 0, 1, 0]);
     }
 
@@ -1650,14 +1650,14 @@ mod tests {
     fn uint64_encode_u64_range() {
         // >= 2^32 → wire 234 + u64 LE
         let v: u64 = 4_294_967_296;
-        let bytes = uint64_serializer().to_bytes(&v);
+        let bytes = hash64_serializer().to_bytes(&v);
         assert_eq!(bytes[4], 234);
         assert_eq!(&bytes[5..], &v.to_le_bytes());
     }
 
     #[test]
     fn uint64_binary_round_trip() {
-        let s = uint64_serializer();
+        let s = hash64_serializer();
         for v in [0_u64, 1, 231, 232, 65535, 65536, 4_294_967_295, 4_294_967_296, u64::MAX] {
             let decoded = s.from_bytes(&s.to_bytes(&v), false).unwrap();
             assert_eq!(decoded, v, "round trip failed for {v}");

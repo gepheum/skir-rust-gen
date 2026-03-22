@@ -201,7 +201,7 @@ class RustSourceFileGenerator {
       struct.record,
       typeSpeller,
     )) {
-      this.push(`struct ${keySpec.rustSpecName};\n\n`);
+      this.push(`pub struct ${keySpec.rustSpecName};\n\n`);
       this.push(
         `impl crate::skir_client::keyed_vec::KeyedVecSpec for ${keySpec.rustSpecName} {\n`,
       );

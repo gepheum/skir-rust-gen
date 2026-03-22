@@ -93,6 +93,73 @@ impl<'a, S: KeyedVecSpec> IntoIterator for &'a KeyedVec<S> {
     }
 }
 
+impl<S: KeyedVecSpec> IntoIterator for KeyedVec<S> {
+    type Item = S::Item;
+    type IntoIter = std::vec::IntoIter<S::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.items.into_iter()
+    }
+}
+
+impl<S: KeyedVecSpec> Clone for KeyedVec<S>
+where
+    S::Item: Clone,
+{
+    fn clone(&self) -> Self {
+        // The index is not cloned; it will be lazily rebuilt on next access.
+        Self::new(self.items.clone())
+    }
+}
+
+impl<S: KeyedVecSpec> std::fmt::Debug for KeyedVec<S>
+where
+    S::Item: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.items.fmt(f)
+    }
+}
+
+impl<S: KeyedVecSpec> Default for KeyedVec<S> {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}
+
+impl<S: KeyedVecSpec> PartialEq for KeyedVec<S>
+where
+    S::Item: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.items == other.items
+    }
+}
+
+impl<S: KeyedVecSpec> AsRef<[S::Item]> for KeyedVec<S> {
+    fn as_ref(&self) -> &[S::Item] {
+        &self.items
+    }
+}
+
+impl<S: KeyedVecSpec> std::borrow::Borrow<[S::Item]> for KeyedVec<S> {
+    fn borrow(&self) -> &[S::Item] {
+        &self.items
+    }
+}
+
+impl<S: KeyedVecSpec> FromIterator<S::Item> for KeyedVec<S> {
+    fn from_iter<I: IntoIterator<Item = S::Item>>(iter: I) -> Self {
+        Self::new(iter.into_iter().collect())
+    }
+}
+
+impl<S: KeyedVecSpec> From<Vec<S::Item>> for KeyedVec<S> {
+    fn from(items: Vec<S::Item>) -> Self {
+        Self::new(items)
+    }
+}
+
 pub mod internal {
     use std::collections::HashMap;
     use std::hash::Hash;

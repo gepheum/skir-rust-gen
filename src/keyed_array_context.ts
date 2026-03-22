@@ -2,8 +2,10 @@ import {
   convertCase,
   FieldPath,
   Module,
+  PrimitiveType,
   Record,
   RecordKey,
+  ResolvedRecordRef,
   ResolvedType,
 } from "skir-internal";
 import { toStructFieldName } from "./naming.js";
@@ -25,17 +27,7 @@ export class KeyedArrayContext {
     const processType = (type: ResolvedType | undefined): void => {
       if (type?.kind !== "array" || !type.key) return;
       const { keyType } = type.key;
-      if (
-        keyType.kind === "primitive" &&
-        (keyType.primitive === "float32" ||
-          keyType.primitive === "float64" ||
-          keyType.primitive === "bytes")
-      ) {
-        // f32 and f64 don't implement Eq in Rust.
-        // bytes is just a pain to deal with, and it's unlikely to be used as a
-        // keyed array key.
-        return;
-      }
+      if (!keyTypeIsSupported(keyType)) return;
       const keySpec = type.key.path.map((part) => part.name.text).join(".");
       const { item } = type;
       if (item.kind !== "record") {
@@ -76,12 +68,7 @@ export class KeyedArrayContext {
       ? [...keyMap.values()].map((fieldPath) => {
           const rustSpecName = typeSpeller
             .getTypeName(struct.key)
-            .concat("_by")
-            .concat(
-              fieldPath.path
-                .map((p) => convertCase(p.name.text, "UpperCamel"))
-                .join("_"),
-            );
+            .concat(getRustKeySpecSuffix(fieldPath));
           const { keyType } = fieldPath;
           const keyTypeIsString =
             keyType.kind === "primitive" && keyType.primitive === "string";
@@ -121,4 +108,24 @@ export class KeyedArrayContext {
     Map<string, FieldPath>
   >();
   private readonly enumsUsedAsKeys = new Set<RecordKey>();
+}
+
+export function keyTypeIsSupported(
+  keyType: PrimitiveType | ResolvedRecordRef,
+): boolean {
+  // f32 and f64 don't implement Eq in Rust.
+  // bytes is just a pain to deal with, and it's unlikely to be used as a
+  // keyed array key.
+  return (
+    keyType.kind === "record" ||
+    (keyType.primitive !== "float32" &&
+      keyType.primitive !== "float64" &&
+      keyType.primitive !== "bytes")
+  );
+}
+
+export function getRustKeySpecSuffix(fieldPath: FieldPath): string {
+  return "_by".concat(
+    fieldPath.path.map((p) => convertCase(p.name.text, "UpperCamel")).join("_"),
+  );
 }

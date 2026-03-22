@@ -1,4 +1,8 @@
 import type { RecordKey, RecordLocation, ResolvedType } from "skir-internal";
+import {
+  getRustKeySpecSuffix,
+  keyTypeIsSupported,
+} from "./keyed_array_context.js";
 import { getTypeName, toRustPathPrefix } from "./naming.js";
 
 /**
@@ -24,7 +28,12 @@ export class TypeSpeller {
       }
       case "array": {
         const itemType = this.getRustType(type.item);
-        return `std::vec::Vec<${itemType}>`;
+        if (type.key && keyTypeIsSupported(type.key.keyType)) {
+          const suffix = getRustKeySpecSuffix(type.key);
+          return `crate::skir_client::keyed_vec::KeyedVec<${itemType}${suffix}>`;
+        } else {
+          return `std::vec::Vec<${itemType}>`;
+        }
       }
       case "optional": {
         const otherType = this.getRustType(type.other);
@@ -63,7 +72,11 @@ export class TypeSpeller {
         return `${rustType}::default()`;
       }
       case "array": {
-        return "std::vec::Vec::new()";
+        if (type.key && keyTypeIsSupported(type.key.keyType)) {
+          return "crate::skir_client::keyed_vec::KeyedVec::default()";
+        } else {
+          return "std::vec::Vec::default()";
+        }
       }
       case "optional": {
         return "std::option::Option::None";

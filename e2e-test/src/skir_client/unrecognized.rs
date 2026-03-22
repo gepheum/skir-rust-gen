@@ -2,60 +2,38 @@ use std::marker::PhantomData;
 use std::vec::Vec;
 
 /// Stores unrecognized fields encountered while deserializing a struct of type
-/// `T`. The type parameter is a phantom: it is never stored, but it prevents
-/// accidentally assigning an `UnrecognizedFields<Foo>` to an
-/// `UnrecognizedFields<Bar>`.
+/// `T`.
+pub type UnrecognizedFields<T> = Option<UnrecognizedFieldsData<T>>;
+
+/// Stores unrecognized fields encountered while deserializing an enum of type
+/// `T`.
+pub type UnrecognizedVariant<T> = Option<UnrecognizedVariantData<T>>;
+
+/// Internal data owned by `UnrecognizedFields<T>` instances.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct UnrecognizedFields<T> {
-    pub(super) data: Option<Box<UnrecognizedFieldsData>>,
+pub struct UnrecognizedFieldsData<T> {
+    pub(super) format: UnrecognizedFormat,
+    pub(super) array_len: u32,
+    // Raw bytes of the unrecognized field values.
+    pub(super) values: Vec<u8>,
     _phantom: PhantomData<T>,
 }
 
-impl<T> UnrecognizedFields<T> {
-    pub fn new() -> Self {
-        Self {
-            data: None,
-            _phantom: PhantomData,
-        }
-    }
+/// Stores an unrecognized enum variant encountered while deserializing.
+#[derive(Clone, Debug, Default)]
+pub struct UnrecognizedVariantData<T> {
+    pub(super) format: UnrecognizedFormat,
+    /// Wire number of the unrecognized variant.
+    pub(super) number: i32,
+    /// Present if the variant wraps a value; `None` if it is a plain number.
+    pub(super) value: Option<Box<Vec<u8>>>,
+    _phantom: PhantomData<T>,
 }
 
-/// Internal data shared by `UnrecognizedFields<T>` instances.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(super) struct UnrecognizedFieldsData {
-    pub format: UnrecognizedFormat,
-    pub array_len: u32,
-    // Raw bytes of the unrecognized field values.
-    pub values: Vec<u8>,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub(super) enum UnrecognizedFormat {
     #[default]
     Unknown,
     DenseJson,
     Bytes,
-}
-
-/// Stores an unrecognized enum variant encountered while deserializing.
-#[derive(Clone, Debug, Default)]
-pub struct UnrecognizedVariant {
-    pub format: UnrecognizedFormat,
-    /// Wire number of the unrecognized variant.
-    pub number: i32,
-    /// Present if the variant wraps a value; `None` if it is a plain number.
-    pub value: Option<Box<Vec<u8>>>,
-}
-
-impl UnrecognizedVariant {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets `value` to a fresh empty buffer and returns a mutable reference to
-    /// it, mirroring the C++ `emplace_value()` method.
-    pub(super) fn emplace_value(&mut self) -> &mut Vec<u8> {
-        self.value = Some(Box::new(Vec::new()));
-        self.value.as_mut().unwrap()
-    }
 }

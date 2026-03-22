@@ -114,9 +114,15 @@ class RustSourceFileGenerator {
       ),
     );
     const typeName = getTypeName(struct);
-    this.push(
-      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,
+    const allFieldsUseRustDefault = struct.record.fields.every(
+      (f) =>
+        f.isRecursive === "hard" ||
+        this.typeSpeller.skirDefaultIsRustDefault(f.type!),
     );
+    const deriveList = allFieldsUseRustDefault
+      ? `std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq, std::default::Default`
+      : `std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq`;
+    this.push(`#[derive(${deriveList})]\n`);
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
       const fieldType = this.typeSpeller.getRustType(field.type!);
@@ -161,25 +167,25 @@ class RustSourceFileGenerator {
 
     this.push("}\n\n");
 
-    // Default trait implementation
-    this.push(`impl std::default::Default for ${typeName} {\n`);
-    this.push(`  fn default() -> Self {\n`);
-    this.push(`    ${typeName} {\n`);
-    for (const field of struct.record.fields) {
-      if (field.isRecursive === "hard") {
-        this.push(`      _${field.name.text}_rec: None,\n`);
-      } else {
-        const fieldName = toStructFieldName(field.name.text);
-        const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
-        this.push(`      ${fieldName}: ${defaultExpr},\n`);
+    // Manual Default impl — only needed when #[derive(Default)] can't be used.
+    if (!allFieldsUseRustDefault) {
+      this.push(`impl std::default::Default for ${typeName} {\n`);
+      this.push(`  fn default() -> Self {\n`);
+      this.push(`    ${typeName} {\n`);
+      for (const field of struct.record.fields) {
+        if (field.isRecursive === "hard") {
+          this.push(`      _${field.name.text}_rec: None,\n`);
+        } else {
+          const fieldName = toStructFieldName(field.name.text);
+          const defaultExpr = this.typeSpeller.getDefaultExpr(field.type!);
+          this.push(`      ${fieldName}: ${defaultExpr},\n`);
+        }
       }
+      this.push(`      _unrecognized: None,\n`);
+      this.push("    }\n");
+      this.push("  }\n");
+      this.push("}\n\n");
     }
-    this.push(
-      `      _unrecognized: crate::skir_client::unrecognized::UnrecognizedFields::new(),\n`,
-    );
-    this.push("    }\n");
-    this.push("  }\n");
-    this.push("}\n\n");
   }
 
   private writeEnum(record: RecordLocation): void {
@@ -297,7 +303,7 @@ class RustSourceFileGenerator {
   }
 
   private joinLinesAndFixFormatting(): string {
-    const indentUnit = "\t";
+    const indentUnit = "    ";
     let result = "";
     // The indent at every line is obtained by repeating indentUnit N times,
     // where N is the length of this array.

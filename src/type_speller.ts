@@ -99,6 +99,42 @@ export class TypeSpeller {
     }
   }
 
+  /**
+   * Returns true if the skir default value for the given type is the same as
+   * what Rust's Default trait would produce, meaning the type can participate
+   * in a #[derive(Default)] without a manual impl.
+   */
+  skirDefaultIsRustDefault(type: ResolvedType): boolean {
+    switch (type.kind) {
+      case "record":
+        // Enums derive Default via #[default] on Unknown.
+        // Structs either derive or manually impl Default — either way
+        // ::default() is the skir default.
+        return true;
+      case "array":
+        // Vec::default() == Vec::new()
+        return true;
+      case "optional":
+        // Option::default() == None
+        return true;
+      case "primitive":
+        switch (type.primitive) {
+          case "bool":
+          case "int32":
+          case "int64":
+          case "float32":
+          case "float64":
+          case "string":
+          case "hash64":
+          case "bytes":
+            return true;
+          case "timestamp":
+            // SystemTime does not implement Default in std.
+            return false;
+        }
+    }
+  }
+
   getClassName(recordKey: RecordKey): string {
     const record = this.recordMap.get(recordKey)!;
     return getTypeName(record);
@@ -166,6 +202,25 @@ export class TypeSpeller {
           const packageAlias = recordLocation.modulePath;
           return `${packageAlias}.${className}_serializer()`;
         }
+      }
+    }
+  }
+}
+
+function skirDefaultIsRustDefault(type: ResolvedType): boolean {
+  switch (type.kind) {
+    case "record":
+    case "array":
+      return true;
+    case "optional":
+      return skirDefaultIsRustDefault(type.other);
+    case "primitive": {
+      const { primitive } = type;
+      switch (primitive) {
+        case "timestamp":
+          return false;
+        default:
+          return false;
       }
     }
   }

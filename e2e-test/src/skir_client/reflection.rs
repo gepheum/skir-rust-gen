@@ -64,9 +64,22 @@ pub enum TypeDescriptor {
 
 impl TypeDescriptor {
     /// Returns the complete, self-describing JSON representation of this type
-    /// descriptor, as produced and consumed by [`parse_type_descriptor_from_json`].
+    /// descriptor, as produced and consumed by [`TypeDescriptor::parse_from_json`].
     pub fn as_json(&self) -> String {
         type_descriptor_to_json(self)
+    }
+
+    /// Parses a [`TypeDescriptor`] from its JSON string representation, as
+    /// produced by [`TypeDescriptor::as_json`].
+    ///
+    /// The format uses a two-pass self-describing JSON: a top-level `"type"` key
+    /// holds the root type signature, and `"records"` holds all referenced
+    /// struct/enum definitions so that forward references and mutual recursion
+    /// are supported.
+    pub fn parse_from_json(json_code: &str) -> Result<TypeDescriptor, String> {
+        let root: serde_json::Value = serde_json::from_str(json_code)
+            .map_err(|e| format!("TypeDescriptor::parse_from_json: {}", e))?;
+        parse_type_descriptor_from_value(&root)
     }
 }
 
@@ -779,19 +792,6 @@ fn json_string(s: &str) -> String {
 // JSON parsing
 // =============================================================================
 
-/// Parses a [`TypeDescriptor`] from its JSON string representation, as
-/// produced by [`TypeDescriptor::as_json`].
-///
-/// The format uses a two-pass self-describing JSON: a top-level `"type"` key
-/// holds the root type signature, and `"records"` holds all referenced
-/// struct/enum definitions so that forward references and mutual recursion are
-/// supported.
-pub fn parse_type_descriptor_from_json(json_code: &str) -> Result<TypeDescriptor, String> {
-    let root: serde_json::Value = serde_json::from_str(json_code)
-        .map_err(|e| format!("parse_type_descriptor_from_json: {}", e))?;
-    parse_type_descriptor_from_value(&root)
-}
-
 /// An enum/struct descriptor that is cheap to clone (Arc inside).
 enum RecordDescriptorInner {
     Struct(Arc<StructDescriptor>),
@@ -1044,7 +1044,7 @@ mod tests {
 
     /// Parses `json`, serialises back to JSON, and asserts both strings match.
     fn assert_round_trip(json: &str) {
-        let td = parse_type_descriptor_from_json(json).expect("parse failed");
+        let td = TypeDescriptor::parse_from_json(json).expect("parse failed");
         let re_serialised = td.as_json();
         assert_eq!(
             json, re_serialised,
@@ -1059,7 +1059,7 @@ mod tests {
     fn primitive_bool_round_trip() {
         let td = TypeDescriptor::Primitive(PrimitiveType::Bool);
         let json = td.as_json();
-        let reparsed = parse_type_descriptor_from_json(&json).unwrap();
+        let reparsed = TypeDescriptor::parse_from_json(&json).unwrap();
         assert_eq!(json, reparsed.as_json());
     }
 
@@ -1078,7 +1078,7 @@ mod tests {
         ] {
             let td = TypeDescriptor::Primitive(prim);
             let json = td.as_json();
-            let reparsed = parse_type_descriptor_from_json(&json).unwrap();
+            let reparsed = TypeDescriptor::parse_from_json(&json).unwrap();
             assert_eq!(
                 json,
                 reparsed.as_json(),
@@ -1135,7 +1135,7 @@ mod tests {
   },
   "records": []
 }"#;
-        let td = parse_type_descriptor_from_json(json).unwrap();
+        let td = TypeDescriptor::parse_from_json(json).unwrap();
         let TypeDescriptor::Array(arr) = td else {
             panic!("expected Array");
         };
@@ -1178,7 +1178,7 @@ mod tests {
 
     #[test]
     fn struct_parse_fields() {
-        let td = parse_type_descriptor_from_json(SIMPLE_STRUCT_JSON).unwrap();
+        let td = TypeDescriptor::parse_from_json(SIMPLE_STRUCT_JSON).unwrap();
         let TypeDescriptor::Struct(s) = &td else {
             panic!("expected Struct");
         };
@@ -1194,7 +1194,7 @@ mod tests {
 
     #[test]
     fn struct_field_by_name() {
-        let td = parse_type_descriptor_from_json(SIMPLE_STRUCT_JSON).unwrap();
+        let td = TypeDescriptor::parse_from_json(SIMPLE_STRUCT_JSON).unwrap();
         let TypeDescriptor::Struct(s) = &td else { panic!() };
         let f = s.field_by_name("name").unwrap();
         assert_eq!(f.number(), 2);
@@ -1203,7 +1203,7 @@ mod tests {
 
     #[test]
     fn struct_field_by_number() {
-        let td = parse_type_descriptor_from_json(SIMPLE_STRUCT_JSON).unwrap();
+        let td = TypeDescriptor::parse_from_json(SIMPLE_STRUCT_JSON).unwrap();
         let TypeDescriptor::Struct(s) = &td else { panic!() };
         let f = s.field_by_number(1).unwrap();
         assert_eq!(f.name(), "id");
@@ -1235,7 +1235,7 @@ mod tests {
     }
   ]
 }"#;
-        let td = parse_type_descriptor_from_json(json).unwrap();
+        let td = TypeDescriptor::parse_from_json(json).unwrap();
         let TypeDescriptor::Struct(s) = td else { panic!() };
         assert_eq!(s.doc(), "A struct.");
         assert!(s.removed_numbers().contains(&3));
@@ -1259,7 +1259,7 @@ mod tests {
     }
   ]
 }"#;
-        let td = parse_type_descriptor_from_json(json).unwrap();
+        let td = TypeDescriptor::parse_from_json(json).unwrap();
         let TypeDescriptor::Struct(s) = td else { panic!() };
         assert_eq!(s.name(), "Inner");
         assert_eq!(s.qualified_name(), "Outer.Inner");
@@ -1300,7 +1300,7 @@ mod tests {
 
     #[test]
     fn enum_parse_variants() {
-        let td = parse_type_descriptor_from_json(SIMPLE_ENUM_JSON).unwrap();
+        let td = TypeDescriptor::parse_from_json(SIMPLE_ENUM_JSON).unwrap();
         let TypeDescriptor::Enum(e) = &td else {
             panic!("expected Enum");
         };
@@ -1311,7 +1311,7 @@ mod tests {
 
     #[test]
     fn enum_constant_variant() {
-        let td = parse_type_descriptor_from_json(SIMPLE_ENUM_JSON).unwrap();
+        let td = TypeDescriptor::parse_from_json(SIMPLE_ENUM_JSON).unwrap();
         let TypeDescriptor::Enum(e) = &td else { panic!() };
         let v = e.variant_by_name("Red").unwrap();
         assert_eq!(v.number(), 1);
@@ -1321,7 +1321,7 @@ mod tests {
 
     #[test]
     fn enum_wrapper_variant() {
-        let td = parse_type_descriptor_from_json(SIMPLE_ENUM_JSON).unwrap();
+        let td = TypeDescriptor::parse_from_json(SIMPLE_ENUM_JSON).unwrap();
         let TypeDescriptor::Enum(e) = &td else { panic!() };
         let v = e.variant_by_number(3).unwrap();
         assert_eq!(v.name(), "Blue");
@@ -1331,7 +1331,7 @@ mod tests {
 
     #[test]
     fn enum_variant_by_name_missing() {
-        let td = parse_type_descriptor_from_json(SIMPLE_ENUM_JSON).unwrap();
+        let td = TypeDescriptor::parse_from_json(SIMPLE_ENUM_JSON).unwrap();
         let TypeDescriptor::Enum(e) = &td else { panic!() };
         assert!(e.variant_by_name("Purple").is_none());
     }
@@ -1361,7 +1361,7 @@ mod tests {
     }
   ]
 }"#;
-        let td = parse_type_descriptor_from_json(json_unsorted).unwrap();
+        let td = TypeDescriptor::parse_from_json(json_unsorted).unwrap();
         let json_out = td.as_json();
         // The output must have A before B before C.
         let pos_a = json_out.find("\"A\"").unwrap();
@@ -1410,7 +1410,7 @@ mod tests {
     }
   ]
 }"#;
-        let td = parse_type_descriptor_from_json(json).unwrap();
+        let td = TypeDescriptor::parse_from_json(json).unwrap();
         let TypeDescriptor::Struct(outer) = &td else { panic!() };
         let inner_field = outer.field_by_name("inner").unwrap();
         let TypeDescriptor::Struct(inner) = inner_field.field_type() else {
@@ -1425,31 +1425,31 @@ mod tests {
 
     #[test]
     fn error_invalid_json() {
-        assert!(parse_type_descriptor_from_json("{not json}").is_err());
+        assert!(TypeDescriptor::parse_from_json("{not json}").is_err());
     }
 
     #[test]
     fn error_missing_type_key() {
-        assert!(parse_type_descriptor_from_json(r#"{"records":[]}"#).is_err());
+        assert!(TypeDescriptor::parse_from_json(r#"{"records":[]}"#).is_err());
     }
 
     #[test]
     fn error_unknown_primitive() {
         let json = r#"{"type":{"kind":"primitive","value":"badtype"},"records":[]}"#;
-        assert!(parse_type_descriptor_from_json(json).is_err());
+        assert!(TypeDescriptor::parse_from_json(json).is_err());
     }
 
     #[test]
     fn error_unknown_record_id() {
         let json = r#"{"type":{"kind":"record","value":"x:NoSuch"},"records":[]}"#;
-        assert!(parse_type_descriptor_from_json(json).is_err());
+        assert!(TypeDescriptor::parse_from_json(json).is_err());
     }
 
     #[test]
     fn error_unknown_record_kind() {
         let json =
             r#"{"type":{"kind":"record","value":"m:S"},"records":[{"kind":"union","id":"m:S"}]}"#;
-        assert!(parse_type_descriptor_from_json(json).is_err());
+        assert!(TypeDescriptor::parse_from_json(json).is_err());
     }
 
     #[test]
@@ -1460,6 +1460,6 @@ mod tests {
     {"kind": "struct", "id": "m:S", "fields": [{"name": "x", "number": 1}]}
   ]
 }"#;
-        assert!(parse_type_descriptor_from_json(json).is_err());
+        assert!(TypeDescriptor::parse_from_json(json).is_err());
     }
 }

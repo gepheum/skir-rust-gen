@@ -1,4 +1,26 @@
-import { type RecordLocation } from "skir-internal";
+import { Module, type RecordLocation } from "skir-internal";
+
+export class Namer {
+  constructor(readonly skirModule: Module | null) {}
+
+  readonly box = this.maybeQualify("std::boxed::", "Box");
+  readonly clone = this.maybeQualify("std::clone::", "Clone");
+  readonly copy = this.maybeQualify("std::marker::", "Copy");
+  readonly debug = this.maybeQualify("std::fmt::", "Debug");
+  readonly default = this.maybeQualify("std::default::", "Default");
+  readonly eq = this.maybeQualify("std::cmp::", "Eq");
+  readonly hash = this.maybeQualify("std::hash::", "Hash");
+  readonly option = this.maybeQualify("std::option::", "Option");
+  readonly partialEq = this.maybeQualify("std::cmp::", "PartialEq");
+  readonly string = this.maybeQualify("std::string::", "String");
+  readonly vec = this.maybeQualify("std::vec::", "Vec");
+
+  private maybeQualify(pathPrefix: string, name: string): string {
+    return this.skirModule?.nameToDeclaration[name]
+      ? `${pathPrefix}${name}`
+      : name;
+  }
+}
 
 export function toRustPathPrefix(modulePath: string): string {
   return "crate::skirout::base::".concat(

@@ -19,10 +19,11 @@ import { KeyedArrayContext } from "./keyed_array_context.js";
 import {
   getTypeName,
   isUpperCasedKeyword,
+  Namer,
   toStructFieldName as toRustFieldName,
 } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
-import { TypeSpeller } from "./type_speller.js";
+import { skirDefaultIsRustDefault, TypeSpeller } from "./type_speller.js";
 
 const Config = z.strictObject({});
 
@@ -57,7 +58,8 @@ class RustSourceFileGenerator {
     private readonly keyedArrayContext: KeyedArrayContext,
     private readonly config: Config,
   ) {
-    this.typeSpeller = new TypeSpeller(recordMap, moduleSpec.skirModule?.path);
+    this.namer = new Namer(moduleSpec.skirModule);
+    this.typeSpeller = new TypeSpeller(recordMap, this.namer);
   }
 
   generate(): string {
@@ -118,7 +120,7 @@ class RustSourceFileGenerator {
   }
 
   private writeStruct(struct: RecordLocation): void {
-    const { typeSpeller } = this;
+    const { namer, typeSpeller } = this;
 
     this.pushSeparator(
       "struct ".concat(
@@ -127,19 +129,17 @@ class RustSourceFileGenerator {
     );
     const typeName = getTypeName(struct);
     const allFieldsUseRustDefault = struct.record.fields.every(
-      (f) =>
-        f.isRecursive === "hard" ||
-        typeSpeller.skirDefaultIsRustDefault(f.type!),
+      (f) => f.isRecursive === "hard" || skirDefaultIsRustDefault(f.type!),
     );
     const deriveList = allFieldsUseRustDefault
-      ? `std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq, std::default::Default`
-      : `std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq`;
+      ? `${namer.clone}, ${namer.debug}, ${namer.partialEq}, ${namer.default}`
+      : `${namer.clone}, ${namer.debug}, ${namer.partialEq}`;
     this.push(`#[derive(${deriveList})]\n`);
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
       const fieldType = typeSpeller.getRustType(field.type!);
       if (field.isRecursive === "hard") {
-        const boxedType = `std::option::Option<std::boxed::Box<${fieldType}>>`;
+        const boxedType = `${namer.option}<${namer.box}<${fieldType}>>`;
         this.push(`  pub _${field.name.text}_rec: ${boxedType},\n`);
       } else {
         const fieldName = toRustFieldName(field.name.text);
@@ -147,7 +147,7 @@ class RustSourceFileGenerator {
       }
     }
     this.push(
-      `  pub _unrecognized: std::option::Option<crate::skir_client::unrecognized::UnrecognizedFields<${typeName}>>,\n`,
+      `  pub _unrecognized: ${namer.option}<crate::skir_client::unrecognized::UnrecognizedFields<${typeName}>>,\n`,
     );
     this.push("}\n\n");
 
@@ -181,7 +181,7 @@ class RustSourceFileGenerator {
 
     // Manual Default impl — only needed when #[derive(Default)] can't be used.
     if (!allFieldsUseRustDefault) {
-      this.push(`impl std::default::Default for ${typeName} {\n`);
+      this.push(`impl ${namer.default} for ${typeName} {\n`);
       this.push(`  fn default() -> Self {\n`);
       this.push(`    ${typeName} {\n`);
       for (const field of struct.record.fields) {
@@ -224,16 +224,17 @@ class RustSourceFileGenerator {
   }
 
   private writeEnum(record: RecordLocation): void {
+    const { namer, typeSpeller } = this;
     this.pushSeparator(
       "enum ".concat(record.recordAncestors.map((r) => r.name.text).join(".")),
     );
     const typeName = getTypeName(record);
     this.push(
-      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,
+      `#[derive(${namer.debug}, ${namer.clone}, ${namer.partialEq})]\n`,
     );
     this.push(`pub enum ${typeName} {\n`);
     this.push(
-      `  Unknown(std::option::Option<crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>>),\n`,
+      `  Unknown(${namer.option}<crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>>),\n`,
     );
     const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
       record.record.fields,
@@ -244,9 +245,9 @@ class RustSourceFileGenerator {
       );
       if (variant.type) {
         const variantType = variant.type!;
-        let valueRustType = this.typeSpeller.getRustType(variantType);
+        let valueRustType = typeSpeller.getRustType(variantType);
         if (doesWrapperVariantNeedBoxing(variantType)) {
-          valueRustType = `std::boxed::Box<${valueRustType}>`;
+          valueRustType = `${namer.box}<${valueRustType}>`;
         }
         this.push(`  ${variantName}(${valueRustType}),\n`);
       } else {
@@ -255,7 +256,7 @@ class RustSourceFileGenerator {
     }
     this.push("}\n\n");
 
-    this.push(`impl std::default::Default for ${typeName} {\n`);
+    this.push(`impl ${namer.default} for ${typeName} {\n`);
     this.push(`  fn default() -> Self {\n`);
     this.push(`    ${typeName}::Unknown(None)\n`);
     this.push("  }\n");
@@ -263,7 +264,7 @@ class RustSourceFileGenerator {
     if (this.keyedArrayContext.isEnumUsedAsKey(record.record)) {
       // Write the _kind enum.
       this.push(
-        `#[derive(std::fmt::Debug, std::clone::Clone, std::marker::Copy, std::cmp::Eq, std::hash::Hash, std::cmp::PartialEq)]\n`,
+        `#[derive(${namer.clone}, ${namer.copy}, ${namer.debug}, ${namer.eq}, ${namer.hash}, ${namer.partialEq})]\n`,
       );
       this.push(`pub enum ${typeName}_kind {\n`);
       this.push("  Unknown,\n");
@@ -415,6 +416,7 @@ class RustSourceFileGenerator {
     );
   }
 
+  private readonly namer: Namer;
   private readonly typeSpeller: TypeSpeller;
   private code = "";
 }

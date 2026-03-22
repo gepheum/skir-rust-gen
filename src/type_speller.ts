@@ -3,7 +3,7 @@ import {
   getRustKeySpecSuffix,
   keyTypeIsSupported,
 } from "./keyed_array_context.js";
-import { getTypeName, toRustPathPrefix } from "./naming.js";
+import { getTypeName, Namer, toRustPathPrefix } from "./naming.js";
 
 /**
  * Transforms a type found in a `.skir` file into a Go type.
@@ -11,7 +11,7 @@ import { getTypeName, toRustPathPrefix } from "./naming.js";
 export class TypeSpeller {
   constructor(
     readonly recordMap: ReadonlyMap<RecordKey, RecordLocation>,
-    readonly skirModulePath: string | undefined,
+    readonly namer: Namer,
   ) {}
 
   getRustType(type: ResolvedType): string {
@@ -19,7 +19,7 @@ export class TypeSpeller {
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
         const className = getTypeName(recordLocation);
-        if (recordLocation.modulePath === this.skirModulePath) {
+        if (recordLocation.modulePath === this.namer.skirModule?.path) {
           return className;
         } else {
           const rustPathPrefix = toRustPathPrefix(recordLocation.modulePath);
@@ -32,12 +32,12 @@ export class TypeSpeller {
           const suffix = getRustKeySpecSuffix(type.key);
           return `crate::skir_client::keyed_vec::KeyedVec<${itemType}${suffix}>`;
         } else {
-          return `std::vec::Vec<${itemType}>`;
+          return `${this.namer.vec}<${itemType}>`;
         }
       }
       case "optional": {
         const otherType = this.getRustType(type.other);
-        return `std::option::Option<${otherType}>`;
+        return `${this.namer.option}<${otherType}>`;
       }
       case "primitive": {
         const { primitive } = type;
@@ -53,13 +53,13 @@ export class TypeSpeller {
           case "float64":
             return "f64";
           case "string":
-            return "std::string::String";
+            return this.namer.string;
           case "hash64":
             return "u64";
           case "timestamp":
             return "std::time::SystemTime";
           case "bytes":
-            return "std::vec::Vec<u8>";
+            return this.namer.vec.concat("<u8>");
         }
       }
     }
@@ -75,11 +75,11 @@ export class TypeSpeller {
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
           return "crate::skir_client::keyed_vec::KeyedVec::default()";
         } else {
-          return "std::vec::Vec::default()";
+          return this.namer.vec.concat("::default()");
         }
       }
       case "optional": {
-        return "std::option::Option::None";
+        return "None";
       }
       case "primitive": {
         const { primitive } = type;
@@ -95,51 +95,15 @@ export class TypeSpeller {
           case "float64":
             return "0.0_f64";
           case "string":
-            return "std::string::String::new()";
+            return this.namer.string.concat("::new()");
           case "hash64":
             return "0_u64";
           case "timestamp":
-            return "std::time::SystemTime::UNIX_EPOCH";
+            return "::std::time::SystemTime::UNIX_EPOCH";
           case "bytes":
-            return "std::vec::Vec::new()";
+            return this.namer.vec.concat("::default()");
         }
       }
-    }
-  }
-
-  /**
-   * Returns true if the skir default value for the given type is the same as
-   * what Rust's Default trait would produce, meaning the type can participate
-   * in a #[derive(Default)] without a manual impl.
-   */
-  skirDefaultIsRustDefault(type: ResolvedType): boolean {
-    switch (type.kind) {
-      case "record":
-        // Enums derive Default via #[default] on Unknown.
-        // Structs either derive or manually impl Default — either way
-        // ::default() is the skir default.
-        return true;
-      case "array":
-        // Vec::default() == Vec::new()
-        return true;
-      case "optional":
-        // Option::default() == None
-        return true;
-      case "primitive":
-        switch (type.primitive) {
-          case "bool":
-          case "int32":
-          case "int64":
-          case "float32":
-          case "float64":
-          case "string":
-          case "hash64":
-          case "bytes":
-            return true;
-          case "timestamp":
-            // SystemTime does not implement Default in std.
-            return false;
-        }
     }
   }
 
@@ -204,7 +168,7 @@ export class TypeSpeller {
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
         const className = getTypeName(recordLocation);
-        if (recordLocation.modulePath === this.skirModulePath) {
+        if (recordLocation.modulePath === this.namer.skirModule?.path) {
           return `${className}_serializer()`;
         } else {
           const packageAlias = recordLocation.modulePath;
@@ -215,7 +179,7 @@ export class TypeSpeller {
   }
 }
 
-function skirDefaultIsRustDefault(type: ResolvedType): boolean {
+export function skirDefaultIsRustDefault(type: ResolvedType): boolean {
   switch (type.kind) {
     case "record":
     case "array":

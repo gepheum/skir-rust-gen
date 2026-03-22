@@ -1,4 +1,5 @@
-// TODO: make unreocgnized fields Option, instead of defining the Option in the client lib as a typedef
+// TODO: serializer
+// TODO: refactor TypeDescriptor so parse_from_json is a static method
 // TODO: comments
 // TODO: methods
 // TODO: constants

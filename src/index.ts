@@ -1,3 +1,6 @@
+// Possibly add the `kind` to the enum if needed by KeyedVec
+// Possibly add the GetKey implementations...
+
 import {
   type CodeGenerator,
   type Constant,
@@ -235,85 +238,6 @@ class RustSourceFileGenerator {
 
   private writeConstant(constant: Constant): void {}
 
-  private getKeyedArrayHelper(field: Field): KeyedArrayHelper | null {
-    const type = field.type!;
-    if (type.kind !== "array") {
-      return null;
-    }
-    const { key } = type;
-    if (!key) {
-      return null;
-    }
-    const searchMethodName = convertCase(field.name.text, "UpperCamel")
-      .concat("_SearchBy")
-      .concat(
-        key.path.map((p) => convertCase(p.name.text, "UpperCamel")).join(""),
-      );
-    const keyAccessor = "e.".concat(
-      key.path
-        .map((p) => toStructFieldName(p.name.text).concat("()"))
-        .join("."),
-    );
-    const { typeSpeller } = this;
-    const itemType = typeSpeller.getRustType(type.item);
-    const makeMapType = (comp: string): string => `map[${comp}]${itemType}`;
-    const { keyType } = key;
-    switch (keyType.kind) {
-      case "primitive": {
-        switch (keyType.primitive) {
-          case "bool":
-          case "int32":
-          case "int64":
-          case "float32":
-          case "float64":
-          case "string":
-          case "hash64": {
-            // The simple case: the key type is already comparable.
-            const comparableType = typeSpeller.getRustType(keyType);
-            return {
-              searchMethodName: searchMethodName,
-              itemType: itemType,
-              mapType: makeMapType(comparableType),
-              exposedKeyType: comparableType,
-              itemToComparableExpr: keyAccessor,
-              exposedKeyToComparableExpr: "k",
-            };
-          }
-          case "timestamp":
-            return {
-              searchMethodName: searchMethodName,
-              itemType: itemType,
-              mapType: makeMapType("int64"),
-              exposedKeyType: "time.Time",
-              itemToComparableExpr: keyAccessor.concat(".UnixMilli()"),
-              exposedKeyToComparableExpr: "k.UnixMilli()",
-            };
-          case "bytes":
-            return {
-              searchMethodName: searchMethodName,
-              itemType: itemType,
-              mapType: makeMapType("string"),
-              exposedKeyType: "skir_client.Bytes",
-              itemToComparableExpr: keyAccessor.concat(".Hex()"),
-              exposedKeyToComparableExpr: "k.Hex()",
-            };
-        }
-        break;
-      }
-      case "record": {
-        const comparableType = typeSpeller.getRustType(keyType).concat("_kind");
-        return {
-          searchMethodName: searchMethodName,
-          itemType: itemType,
-          mapType: makeMapType(comparableType),
-          exposedKeyType: comparableType,
-          itemToComparableExpr: keyAccessor,
-          exposedKeyToComparableExpr: "k",
-        };
-      }
-    }
-  }
-
   private pushSeparator(header: string): void {
     this.push(`// ${"=".repeat(78)}\n`);
     this.push(`// ${header}\n`);
@@ -452,21 +376,6 @@ function doesWrapperVariantNeedBoxing(type: ResolvedType): boolean {
     case "record":
       return true;
   }
-}
-
-interface KeyedArrayHelper {
-  /** Name of the generated Search method. */
-  readonly searchMethodName: string;
-  /** Item (Go) type. */
-  readonly itemType: string;
-  /** Go type of the internal map. */
-  readonly mapType: string;
-  /** Key (Go) type exposed to the user. */
-  readonly exposedKeyType: string;
-  /** Go expression for extracting a comparable key from an item (e). */
-  readonly itemToComparableExpr: string;
-  /** Go expression for extracting a comparable key from an exposed key (k). */
-  readonly exposedKeyToComparableExpr: string;
 }
 
 function toRustStringLiteral(input: string): string {

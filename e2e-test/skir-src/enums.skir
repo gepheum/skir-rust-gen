@@ -63,3 +63,12 @@ enum Status {
   }
   error: Error;
 }
+
+enum EnumWithNameConflictA {
+  FOO;
+  foo: bool;
+}
+
+enum EnumWithNameConflictB {
+  SELF;
+}

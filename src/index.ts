@@ -1,15 +1,20 @@
 import {
   type CodeGenerator,
   type Constant,
+  convertCase,
   type Doc,
   type Field,
   type Method,
   type RecordKey,
   type RecordLocation,
-  convertCase,
+  ResolvedType,
 } from "skir-internal";
 import { z } from "zod";
-import { getTypeName, toStructFieldName } from "./naming.js";
+import {
+  getTypeName,
+  isUpperCasedKeyword,
+  toStructFieldName,
+} from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
 
@@ -199,6 +204,24 @@ class RustSourceFileGenerator {
     this.push(
       `  Unknown(crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>),\n`,
     );
+    const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
+      record.record.fields,
+    );
+    for (const variant of record.record.fields) {
+      const variantName = convertCase(variant.name.text, "UpperCamel").concat(
+        variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
+      );
+      if (variant.type) {
+        const variantType = variant.type!;
+        let valueRustType = this.typeSpeller.getRustType(variantType);
+        if (doesWrapperVariantNeedBoxing(variantType)) {
+          valueRustType = `std::boxed::Box<${valueRustType}>`;
+        }
+        this.push(`  ${variantName}(${valueRustType}),\n`);
+      } else {
+        this.push(`  ${variantName},\n`);
+      }
+    }
     this.push("}\n\n");
 
     this.push(`impl std::default::Default for ${typeName} {\n`);
@@ -406,6 +429,31 @@ class RustSourceFileGenerator {
   private code = "";
 }
 
+function doVariantNamesNeedSuffix(variants: readonly Field[]): boolean {
+  const seenNames = new Set<string>();
+  for (const variant of variants) {
+    const name = convertCase(variant.name.text, "UpperCamel");
+    if (isUpperCasedKeyword(name) || seenNames.has(name)) {
+      return true;
+    }
+    seenNames.add(name);
+  }
+  return false;
+}
+
+function doesWrapperVariantNeedBoxing(type: ResolvedType): boolean {
+  switch (type.kind) {
+    case "array":
+      return false;
+    case "optional":
+      return doesWrapperVariantNeedBoxing(type.other);
+    case "primitive":
+      return false;
+    case "record":
+      return true;
+  }
+}
+
 interface KeyedArrayHelper {
   /** Name of the generated Search method. */
   readonly searchMethodName: string;
@@ -421,7 +469,7 @@ interface KeyedArrayHelper {
   readonly exposedKeyToComparableExpr: string;
 }
 
-function toGoStringLiteral(input: string): string {
+function toRustStringLiteral(input: string): string {
   const escaped = input
     .replace(/\\/g, "\\\\") // Escape backslashes
     .replace(/"/g, '\\"') // Escape double quotes
@@ -459,7 +507,7 @@ function tryGetGoLiteral(constant: Constant): string | null {
       }
     }
     case "string":
-      return toGoStringLiteral(valueAsDenseJson as string);
+      return toRustStringLiteral(valueAsDenseJson as string);
   }
   return null;
 }

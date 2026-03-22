@@ -30,7 +30,7 @@ export class TypeSpeller {
         const itemType = this.getRustType(type.item);
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
           const suffix = getRustKeySpecSuffix(type.key);
-          return `crate::keyed_vec::KeyedVec<${itemType}${suffix}>`;
+          return `crate::skir_client::KeyedVec<${itemType}${suffix}>`;
         } else {
           return `${this.namer.vec}<${itemType}>`;
         }

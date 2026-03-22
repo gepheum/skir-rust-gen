@@ -210,12 +210,12 @@ class RustSourceFileGenerator {
     )) {
       this.push(`pub struct ${keySpec.rustSpecName};\n\n`);
       this.push(
-        `impl crate::keyed_vec::KeyedVecSpec for ${keySpec.rustSpecName} {\n`,
+        `impl crate::skir_client::KeyedVecSpec for ${keySpec.rustSpecName} {\n`,
       );
       this.push(`type Item = ${typeName};\n`);
       this.push(`type StorageKey = ${keySpec.rustKeyType};\n`);
       this.push(
-        `type Lookup = crate::keyed_vec::internal::${keySpec.lookupImpl};\n`,
+        `type Lookup = crate::skir_client::internal::${keySpec.lookupImpl};\n`,
       );
       this.push(`fn get_key(item: &${typeName}) -> ${keySpec.rustKeyType} {\n`);
       this.push(`  ${keySpec.rustKeyExpr}\n`);

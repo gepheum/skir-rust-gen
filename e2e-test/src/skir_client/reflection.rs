@@ -90,6 +90,10 @@ pub struct ArrayDescriptor {
 }
 
 impl ArrayDescriptor {
+    pub(super) fn new(item_type: TypeDescriptor, key_extractor: String) -> Self {
+        Self { item_type, key_extractor }
+    }
+
     /// The type descriptor for each array element.
     pub fn item_type(&self) -> &TypeDescriptor {
         &self.item_type

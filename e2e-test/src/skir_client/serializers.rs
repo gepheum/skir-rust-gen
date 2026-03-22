@@ -1,6 +1,7 @@
 use std::time::{Duration, SystemTime};
 
-use super::reflection::{PrimitiveType, TypeDescriptor};
+use super::keyed_vec::{KeyedVec, KeyedVecSpec};
+use super::reflection::{ArrayDescriptor, PrimitiveType, TypeDescriptor};
 use super::serializer::{Serializer, TypeAdapter};
 
 // =============================================================================
@@ -50,6 +51,25 @@ pub fn string_serializer() -> Serializer<String> {
 /// Returns a [`Serializer`] for `Vec<u8>` (bytes) values.
 pub fn bytes_serializer() -> Serializer<Vec<u8>> {
     Serializer::new(BytesAdapter)
+}
+
+/// Returns a [`Serializer`] for `Vec<T>` arrays.
+pub fn array_serializer<T: 'static>(item: Serializer<T>) -> Serializer<Vec<T>> {
+    Serializer::new(ArrayAdapter { item })
+}
+
+/// Returns a [`Serializer`] for [`KeyedVec<S>`] arrays.
+pub fn keyed_array_serializer<S: KeyedVecSpec + 'static>(
+    item: Serializer<S::Item>,
+) -> Serializer<KeyedVec<S>> {
+    Serializer::new(KeyedArrayAdapter { item })
+}
+
+/// Returns a [`Serializer`] for `Option<T>` values.
+///
+/// `None` → JSON `null` / wire `0xff`; `Some(v)` delegates to the inner serializer.
+pub fn optional_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Option<T>> {
+    Serializer::new(OptionalAdapter { other })
 }
 
 // =============================================================================
@@ -994,6 +1014,262 @@ impl TypeAdapter<Vec<u8>> for BytesAdapter {
     }
 }
 
+// =============================================================================
+// ArrayAdapter
+// =============================================================================
+
+pub(crate) struct ArrayAdapter<T: 'static> {
+    item: Serializer<T>,
+}
+
+impl<T: 'static> TypeAdapter<Vec<T>> for ArrayAdapter<T> {
+    fn is_default(&self, input: &Vec<T>) -> bool {
+        input.is_empty()
+    }
+
+    // Dense: [item,item,...] — Readable: with newlines and 2-space indentation.
+    fn to_json(&self, input: &Vec<T>, eol_indent: Option<&str>, out: &mut String) {
+        out.push('[');
+        if let Some(eol) = eol_indent {
+            let child_eol = format!("{}  ", eol);
+            for (i, item) in input.iter().enumerate() {
+                out.push_str(&child_eol);
+                self.item.adapter().to_json(item, Some(&child_eol), out);
+                if i + 1 < input.len() {
+                    out.push(',');
+                }
+            }
+            if !input.is_empty() {
+                out.push_str(eol);
+            }
+        } else {
+            for (i, item) in input.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                self.item.adapter().to_json(item, None, out);
+            }
+        }
+        out.push(']');
+    }
+
+    fn from_json(
+        &self,
+        json: &serde_json::Value,
+        keep_unrecognized_values: bool,
+    ) -> Result<Vec<T>, String> {
+        match json {
+            serde_json::Value::Array(arr) => arr
+                .iter()
+                .map(|v| self.item.adapter().from_json(v, keep_unrecognized_values))
+                .collect(),
+            _ => Ok(vec![]),
+        }
+    }
+
+    // empty → wire 246; else → wire 247 + encode_uint32(count) + items.
+    fn encode(&self, input: &Vec<T>, out: &mut Vec<u8>) {
+        if input.is_empty() {
+            out.push(246);
+        } else {
+            out.push(247);
+            encode_uint32(input.len() as u32, out);
+            for item in input {
+                self.item.adapter().encode(item, out);
+            }
+        }
+    }
+
+    fn decode(
+        &self,
+        input: &mut &[u8],
+        keep_unrecognized_values: bool,
+    ) -> Result<Vec<T>, String> {
+        let wire = read_u8(input)?;
+        if wire == 0 || wire == 246 {
+            return Ok(vec![]);
+        }
+        let n = decode_number(input)? as usize;
+        let mut items = Vec::with_capacity(n);
+        for _ in 0..n {
+            items.push(self.item.adapter().decode(input, keep_unrecognized_values)?);
+        }
+        Ok(items)
+    }
+
+    fn type_descriptor(&self) -> TypeDescriptor {
+        TypeDescriptor::Array(Box::new(ArrayDescriptor::new(
+            self.item.adapter().type_descriptor(),
+            String::new(),
+        )))
+    }
+
+    fn clone_box(&self) -> Box<dyn TypeAdapter<Vec<T>>> {
+        Box::new(ArrayAdapter { item: self.item.clone() })
+    }
+}
+
+// =============================================================================
+// KeyedArrayAdapter
+// =============================================================================
+
+pub(crate) struct KeyedArrayAdapter<S: KeyedVecSpec + 'static> {
+    item: Serializer<S::Item>,
+}
+
+impl<S: KeyedVecSpec + 'static> TypeAdapter<KeyedVec<S>> for KeyedArrayAdapter<S> {
+    fn is_default(&self, input: &KeyedVec<S>) -> bool {
+        input.is_empty()
+    }
+
+    // Dense: [item,item,...] — Readable: with newlines and 2-space indentation.
+    fn to_json(&self, input: &KeyedVec<S>, eol_indent: Option<&str>, out: &mut String) {
+        out.push('[');
+        if let Some(eol) = eol_indent {
+            let child_eol = format!("{}  ", eol);
+            for (i, item) in input.iter().enumerate() {
+                out.push_str(&child_eol);
+                self.item.adapter().to_json(item, Some(&child_eol), out);
+                if i + 1 < input.len() {
+                    out.push(',');
+                }
+            }
+            if !input.is_empty() {
+                out.push_str(eol);
+            }
+        } else {
+            for (i, item) in input.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                self.item.adapter().to_json(item, None, out);
+            }
+        }
+        out.push(']');
+    }
+
+    fn from_json(
+        &self,
+        json: &serde_json::Value,
+        keep_unrecognized_values: bool,
+    ) -> Result<KeyedVec<S>, String> {
+        match json {
+            serde_json::Value::Array(arr) => {
+                let items: Result<Vec<S::Item>, String> = arr
+                    .iter()
+                    .map(|v| self.item.adapter().from_json(v, keep_unrecognized_values))
+                    .collect();
+                items.map(KeyedVec::new)
+            }
+            _ => Ok(KeyedVec::default()),
+        }
+    }
+
+    // empty → wire 246; else → wire 247 + encode_uint32(count) + items.
+    fn encode(&self, input: &KeyedVec<S>, out: &mut Vec<u8>) {
+        if input.is_empty() {
+            out.push(246);
+        } else {
+            out.push(247);
+            encode_uint32(input.len() as u32, out);
+            for item in input.iter() {
+                self.item.adapter().encode(item, out);
+            }
+        }
+    }
+
+    fn decode(
+        &self,
+        input: &mut &[u8],
+        keep_unrecognized_values: bool,
+    ) -> Result<KeyedVec<S>, String> {
+        let wire = read_u8(input)?;
+        if wire == 0 || wire == 246 {
+            return Ok(KeyedVec::default());
+        }
+        let n = decode_number(input)? as usize;
+        let mut items = Vec::with_capacity(n);
+        for _ in 0..n {
+            items.push(self.item.adapter().decode(input, keep_unrecognized_values)?);
+        }
+        Ok(KeyedVec::new(items))
+    }
+
+    fn type_descriptor(&self) -> TypeDescriptor {
+        TypeDescriptor::Array(Box::new(ArrayDescriptor::new(
+            self.item.adapter().type_descriptor(),
+            String::new(),
+        )))
+    }
+
+    fn clone_box(&self) -> Box<dyn TypeAdapter<KeyedVec<S>>> {
+        Box::new(KeyedArrayAdapter { item: self.item.clone() })
+    }
+}
+
+// =============================================================================
+// OptionalAdapter
+// =============================================================================
+
+pub(crate) struct OptionalAdapter<T: 'static> {
+    other: Serializer<T>,
+}
+
+impl<T: 'static> TypeAdapter<Option<T>> for OptionalAdapter<T> {
+    fn is_default(&self, input: &Option<T>) -> bool {
+        input.is_none()
+    }
+
+    // None → JSON `null`; Some(v) → delegate to inner adapter.
+    fn to_json(&self, input: &Option<T>, eol_indent: Option<&str>, out: &mut String) {
+        match input {
+            None => out.push_str("null"),
+            Some(v) => self.other.adapter().to_json(v, eol_indent, out),
+        }
+    }
+
+    fn from_json(
+        &self,
+        json: &serde_json::Value,
+        keep_unrecognized_values: bool,
+    ) -> Result<Option<T>, String> {
+        if json.is_null() {
+            return Ok(None);
+        }
+        self.other.adapter().from_json(json, keep_unrecognized_values).map(Some)
+    }
+
+    // None → wire 255; Some(v) → delegate (inner writes its own wire byte).
+    fn encode(&self, input: &Option<T>, out: &mut Vec<u8>) {
+        match input {
+            None => out.push(255),
+            Some(v) => self.other.adapter().encode(v, out),
+        }
+    }
+
+    // Peek at the next byte: 255 → consume it and return None;
+    // otherwise let the inner adapter read normally.
+    fn decode(
+        &self,
+        input: &mut &[u8],
+        keep_unrecognized_values: bool,
+    ) -> Result<Option<T>, String> {
+        if input.first() == Some(&255) {
+            *input = &input[1..];
+            return Ok(None);
+        }
+        self.other.adapter().decode(input, keep_unrecognized_values).map(Some)
+    }
+
+    fn type_descriptor(&self) -> TypeDescriptor {
+        TypeDescriptor::Optional(Box::new(self.other.adapter().type_descriptor()))
+    }
+
+    fn clone_box(&self) -> Box<dyn TypeAdapter<Option<T>>> {
+        Box::new(OptionalAdapter { other: self.other.clone() })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1881,6 +2157,216 @@ mod tests {
         let s = bytes_serializer();
         for data in [vec![], vec![0_u8], b"hello".to_vec(), vec![0xFF_u8; 300]] {
             assert_eq!(s.from_bytes(&s.to_bytes(&data), false).unwrap(), data);
+        }
+    }
+
+    // ── array_serializer ──────────────────────────────────────────────────────
+
+    #[test]
+    fn array_to_json_dense_empty() {
+        assert_eq!(array_serializer(int32_serializer()).to_json(&vec![], false), "[]");
+    }
+
+    #[test]
+    fn array_to_json_dense_nonempty() {
+        assert_eq!(
+            array_serializer(int32_serializer()).to_json(&vec![1_i32, 2, 3], false),
+            "[1,2,3]",
+        );
+    }
+
+    #[test]
+    fn array_to_json_readable_empty() {
+        assert_eq!(array_serializer(int32_serializer()).to_json(&vec![], true), "[]");
+    }
+
+    #[test]
+    fn array_to_json_readable_nonempty() {
+        assert_eq!(
+            array_serializer(int32_serializer()).to_json(&vec![1_i32, 2], true),
+            "[\n  1,\n  2\n]",
+        );
+    }
+
+    #[test]
+    fn array_from_json_array() {
+        assert_eq!(
+            array_serializer(int32_serializer()).from_json("[10,20,30]", false).unwrap(),
+            vec![10_i32, 20, 30],
+        );
+    }
+
+    #[test]
+    fn array_from_json_null_is_empty() {
+        assert_eq!(
+            array_serializer(int32_serializer()).from_json("null", false).unwrap(),
+            Vec::<i32>::new(),
+        );
+    }
+
+    #[test]
+    fn array_encode_empty_is_wire_246() {
+        assert_eq!(
+            array_serializer(int32_serializer()).to_bytes(&vec![]),
+            b"skir\xf6",
+        );
+    }
+
+    #[test]
+    fn array_encode_nonempty() {
+        // wire 247 + count 3 + items [1, 2, 3] (each a single-byte int32)
+        let bytes = array_serializer(int32_serializer()).to_bytes(&vec![1_i32, 2, 3]);
+        assert_eq!(&bytes[4..], &[0xf7_u8, 3, 1, 2, 3]);
+    }
+
+    #[test]
+    fn array_binary_round_trip() {
+        let s = array_serializer(int32_serializer());
+        for v in [vec![], vec![0_i32], vec![1, 2, 3], vec![-1, 0, 1]] {
+            assert_eq!(s.from_bytes(&s.to_bytes(&v), false).unwrap(), v);
+        }
+    }
+
+    // ── keyed_array_serializer ────────────────────────────────────────────────
+
+    struct I32Spec;
+
+    impl KeyedVecSpec for I32Spec {
+        type Item = i32;
+        type StorageKey = i32;
+        type Lookup = super::super::keyed_vec::internal::CopyLookup;
+        fn get_key(item: &i32) -> i32 {
+            *item
+        }
+        fn default_item() -> &'static i32 {
+            static D: i32 = 0;
+            &D
+        }
+    }
+
+    fn i32_keyed_vec(items: Vec<i32>) -> KeyedVec<I32Spec> {
+        KeyedVec::new(items)
+    }
+
+    #[test]
+    fn keyed_array_to_json_dense_empty() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        assert_eq!(s.to_json(&i32_keyed_vec(vec![]), false), "[]");
+    }
+
+    #[test]
+    fn keyed_array_to_json_dense_nonempty() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        assert_eq!(s.to_json(&i32_keyed_vec(vec![10, 20]), false), "[10,20]");
+    }
+
+    #[test]
+    fn keyed_array_to_json_readable_nonempty() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        assert_eq!(s.to_json(&i32_keyed_vec(vec![1, 2]), true), "[\n  1,\n  2\n]");
+    }
+
+    #[test]
+    fn keyed_array_from_json_array() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let result = s.from_json("[10,20,30]", false).unwrap();
+        assert_eq!(&result[..], &[10_i32, 20, 30]);
+    }
+
+    #[test]
+    fn keyed_array_from_json_null_is_empty() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        assert!(s.from_json("null", false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn keyed_array_encode_empty_is_wire_246() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        assert_eq!(s.to_bytes(&i32_keyed_vec(vec![])), b"skir\xf6");
+    }
+
+    #[test]
+    fn keyed_array_encode_nonempty() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let bytes = s.to_bytes(&i32_keyed_vec(vec![5, 6]));
+        // wire 247 + count 2 + items [5, 6]
+        assert_eq!(&bytes[4..], &[0xf7_u8, 2, 5, 6]);
+    }
+
+    #[test]
+    fn keyed_array_binary_round_trip() {
+        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        for v in [vec![], vec![0_i32], vec![1, 2, 3]] {
+            let kv = i32_keyed_vec(v.clone());
+            let decoded = s.from_bytes(&s.to_bytes(&kv), false).unwrap();
+            assert_eq!(&decoded[..], &v);
+        }
+    }
+
+    // ── optional_serializer ───────────────────────────────────────────────────
+
+    #[test]
+    fn optional_to_json_none_is_null() {
+        assert_eq!(optional_serializer(int32_serializer()).to_json(&None, false), "null");
+    }
+
+    #[test]
+    fn optional_to_json_some_delegates() {
+        assert_eq!(
+            optional_serializer(int32_serializer()).to_json(&Some(42_i32), false),
+            "42",
+        );
+    }
+
+    #[test]
+    fn optional_to_json_readable_none_is_null() {
+        assert_eq!(optional_serializer(int32_serializer()).to_json(&None, true), "null");
+    }
+
+    #[test]
+    fn optional_to_json_readable_some_delegates() {
+        assert_eq!(
+            optional_serializer(int32_serializer()).to_json(&Some(42_i32), true),
+            "42",
+        );
+    }
+
+    #[test]
+    fn optional_from_json_null_is_none() {
+        assert_eq!(
+            optional_serializer(int32_serializer()).from_json("null", false).unwrap(),
+            None::<i32>,
+        );
+    }
+
+    #[test]
+    fn optional_from_json_value_is_some() {
+        assert_eq!(
+            optional_serializer(int32_serializer()).from_json("7", false).unwrap(),
+            Some(7_i32),
+        );
+    }
+
+    #[test]
+    fn optional_encode_none_is_wire_255() {
+        assert_eq!(
+            optional_serializer(int32_serializer()).to_bytes(&None),
+            b"skir\xff",
+        );
+    }
+
+    #[test]
+    fn optional_encode_some_delegates() {
+        // Some(5) → the inner int32 adapter writes wire byte 5 directly.
+        let bytes = optional_serializer(int32_serializer()).to_bytes(&Some(5_i32));
+        assert_eq!(&bytes[4..], &[5_u8]);
+    }
+
+    #[test]
+    fn optional_binary_round_trip() {
+        let s = optional_serializer(int32_serializer());
+        for v in [None, Some(0_i32), Some(42), Some(-1)] {
+            assert_eq!(s.from_bytes(&s.to_bytes(&v), false).unwrap(), v);
         }
     }
 }

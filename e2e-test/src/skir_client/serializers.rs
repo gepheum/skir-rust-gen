@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime};
+
 use super::reflection::{PrimitiveType, TypeDescriptor};
 use super::serializer::{Serializer, TypeAdapter};
 
@@ -35,8 +37,8 @@ pub fn float64_serializer() -> Serializer<f64> {
     Serializer::new(Float64Adapter)
 }
 
-/// Returns a [`Serializer`] for [`Timestamp`] values.
-pub fn timestamp_serializer() -> Serializer<Timestamp> {
+/// Returns a [`Serializer`] for [`SystemTime`] values (unix-millisecond timestamps).
+pub fn timestamp_serializer() -> Serializer<SystemTime> {
     Serializer::new(TimestampAdapter)
 }
 
@@ -599,31 +601,28 @@ impl TypeAdapter<f64> for Float64Adapter {
 }
 
 // =============================================================================
-// Timestamp
+// Timestamp helpers
 // =============================================================================
 
 const MIN_TIMESTAMP_MILLIS: i64 = -8_640_000_000_000_000;
 const MAX_TIMESTAMP_MILLIS: i64 = 8_640_000_000_000_000;
 
-/// Unix-millisecond timestamp.
-///
-/// Valid range: April 20, 271821 BC – September 13, 275760 AD
-/// (same bounds as the Go and TypeScript Skir clients).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct Timestamp(pub i64);
+/// Converts a [`SystemTime`] to unix milliseconds (clamped to valid range).
+fn system_time_to_millis(t: SystemTime) -> i64 {
+    let ms = match t.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(d) => d.as_millis() as i64,
+        Err(e) => -(e.duration().as_millis() as i64),
+    };
+    ms.clamp(MIN_TIMESTAMP_MILLIS, MAX_TIMESTAMP_MILLIS)
+}
 
-impl Timestamp {
-    /// The Unix epoch (1970-01-01T00:00:00.000Z).
-    pub const UNIX_EPOCH: Timestamp = Timestamp(0);
-
-    /// Returns the underlying Unix milliseconds.
-    pub fn unix_millis(self) -> i64 {
-        self.0
-    }
-
-    /// Creates a `Timestamp` from Unix milliseconds, clamping to the valid range.
-    pub fn from_unix_millis(ms: i64) -> Self {
-        Timestamp(ms.clamp(MIN_TIMESTAMP_MILLIS, MAX_TIMESTAMP_MILLIS))
+/// Creates a [`SystemTime`] from unix milliseconds.
+fn millis_to_system_time(ms: i64) -> SystemTime {
+    let ms = ms.clamp(MIN_TIMESTAMP_MILLIS, MAX_TIMESTAMP_MILLIS);
+    if ms >= 0 {
+        SystemTime::UNIX_EPOCH + Duration::from_millis(ms as u64)
+    } else {
+        SystemTime::UNIX_EPOCH - Duration::from_millis((-ms) as u64)
     }
 }
 
@@ -770,15 +769,15 @@ fn decode_hex(s: &str) -> Result<Vec<u8>, String> {
 
 pub(crate) struct TimestampAdapter;
 
-impl TypeAdapter<Timestamp> for TimestampAdapter {
-    fn is_default(&self, input: &Timestamp) -> bool {
-        input.0 == 0
+impl TypeAdapter<SystemTime> for TimestampAdapter {
+    fn is_default(&self, input: &SystemTime) -> bool {
+        system_time_to_millis(*input) == 0
     }
 
     // Dense: unix millis as a JSON number.
     // Readable: {"unix_millis": N, "formatted": "<ISO-8601>"}.
-    fn to_json(&self, input: &Timestamp, eol_indent: Option<&str>, out: &mut String) {
-        let ms = input.0;
+    fn to_json(&self, input: &SystemTime, eol_indent: Option<&str>, out: &mut String) {
+        let ms = system_time_to_millis(*input);
         if let Some(eol) = eol_indent {
             let child = format!("{}  ", eol);
             out.push('{');
@@ -801,27 +800,27 @@ impl TypeAdapter<Timestamp> for TimestampAdapter {
         &self,
         json: &serde_json::Value,
         _keep_unrecognized_values: bool,
-    ) -> Result<Timestamp, String> {
-        match json {
-            serde_json::Value::Number(n) => Ok(Timestamp::from_unix_millis(
-                n.as_i64()
-                    .unwrap_or_else(|| n.as_f64().map(|f| f.round() as i64).unwrap_or(0)),
-            )),
-            serde_json::Value::String(s) => Ok(Timestamp::from_unix_millis(
-                s.parse::<f64>().map(|f| f.round() as i64).unwrap_or(0),
-            )),
+    ) -> Result<SystemTime, String> {
+        let ms = match json {
+            serde_json::Value::Number(n) => n
+                .as_i64()
+                .unwrap_or_else(|| n.as_f64().map(|f| f.round() as i64).unwrap_or(0)),
+            serde_json::Value::String(s) => {
+                s.parse::<f64>().map(|f| f.round() as i64).unwrap_or(0)
+            }
             // Readable format: {"unix_millis": N, "formatted": "..."}
             serde_json::Value::Object(map) => match map.get("unix_millis") {
-                Some(field) => self.from_json(field, false),
-                None => Ok(Timestamp::UNIX_EPOCH),
+                Some(field) => return self.from_json(field, false),
+                None => 0,
             },
-            _ => Ok(Timestamp::UNIX_EPOCH),
-        }
+            _ => 0,
+        };
+        Ok(millis_to_system_time(ms))
     }
 
     // millis == 0 → wire 0; else → wire 239 + i64 LE.
-    fn encode(&self, input: &Timestamp, out: &mut Vec<u8>) {
-        let ms = input.0;
+    fn encode(&self, input: &SystemTime, out: &mut Vec<u8>) {
+        let ms = system_time_to_millis(*input);
         if ms == 0 {
             out.push(0);
         } else {
@@ -834,15 +833,15 @@ impl TypeAdapter<Timestamp> for TimestampAdapter {
         &self,
         input: &mut &[u8],
         _keep_unrecognized_values: bool,
-    ) -> Result<Timestamp, String> {
-        decode_number(input).map(Timestamp::from_unix_millis)
+    ) -> Result<SystemTime, String> {
+        decode_number(input).map(millis_to_system_time)
     }
 
     fn type_descriptor(&self) -> TypeDescriptor {
         TypeDescriptor::Primitive(PrimitiveType::Timestamp)
     }
 
-    fn clone_box(&self) -> Box<dyn TypeAdapter<Timestamp>> {
+    fn clone_box(&self) -> Box<dyn TypeAdapter<SystemTime>> {
         Box::new(TimestampAdapter)
     }
 }
@@ -1600,20 +1599,21 @@ mod tests {
 
     #[test]
     fn timestamp_to_json_dense_epoch() {
-        assert_eq!(timestamp_serializer().to_json(&Timestamp::UNIX_EPOCH, false), "0");
+        assert_eq!(timestamp_serializer().to_json(&SystemTime::UNIX_EPOCH, false), "0");
     }
 
     #[test]
     fn timestamp_to_json_dense_nonzero() {
+        let ts = millis_to_system_time(1_234_567_890_000);
         assert_eq!(
-            timestamp_serializer().to_json(&Timestamp(1_234_567_890_000), false),
+            timestamp_serializer().to_json(&ts, false),
             "1234567890000",
         );
     }
 
     #[test]
     fn timestamp_to_json_readable() {
-        let ts = Timestamp(1_234_567_890_000);
+        let ts = millis_to_system_time(1_234_567_890_000);
         let expected =
             "{\n  \"unix_millis\": 1234567890000,\n  \"formatted\": \"2009-02-13T23:31:30.000Z\"\n}";
         assert_eq!(timestamp_serializer().to_json(&ts, true), expected);
@@ -1625,7 +1625,7 @@ mod tests {
     fn timestamp_from_json_number() {
         assert_eq!(
             timestamp_serializer().from_json("1234567890000", false).unwrap(),
-            Timestamp(1_234_567_890_000),
+            millis_to_system_time(1_234_567_890_000),
         );
     }
 
@@ -1633,7 +1633,7 @@ mod tests {
     fn timestamp_from_json_string() {
         assert_eq!(
             timestamp_serializer().from_json(r#""1234567890000""#, false).unwrap(),
-            Timestamp(1_234_567_890_000),
+            millis_to_system_time(1_234_567_890_000),
         );
     }
 
@@ -1643,7 +1643,7 @@ mod tests {
             r#"{"unix_millis": 1234567890000, "formatted": "2009-02-13T23:31:30.000Z"}"#;
         assert_eq!(
             timestamp_serializer().from_json(json, false).unwrap(),
-            Timestamp(1_234_567_890_000),
+            millis_to_system_time(1_234_567_890_000),
         );
     }
 
@@ -1651,7 +1651,7 @@ mod tests {
     fn timestamp_from_json_null_is_epoch() {
         assert_eq!(
             timestamp_serializer().from_json("null", false).unwrap(),
-            Timestamp::UNIX_EPOCH,
+            SystemTime::UNIX_EPOCH,
         );
     }
 
@@ -1659,12 +1659,12 @@ mod tests {
 
     #[test]
     fn timestamp_encode_epoch_is_single_byte_zero() {
-        assert_eq!(timestamp_serializer().to_bytes(&Timestamp::UNIX_EPOCH), b"skir\x00");
+        assert_eq!(timestamp_serializer().to_bytes(&SystemTime::UNIX_EPOCH), b"skir\x00");
     }
 
     #[test]
     fn timestamp_encode_nonzero_is_wire_239() {
-        let ts = Timestamp(1_234_567_890_000);
+        let ts = millis_to_system_time(1_234_567_890_000);
         let bytes = timestamp_serializer().to_bytes(&ts);
         assert_eq!(bytes[4], 239);
         assert_eq!(&bytes[5..], &1_234_567_890_000_i64.to_le_bytes());
@@ -1673,8 +1673,8 @@ mod tests {
     #[test]
     fn timestamp_binary_round_trip() {
         let s = timestamp_serializer();
-        for ms in [0, 1, 1_234_567_890_000, -1000, i64::MIN / 2, i64::MAX / 2] {
-            let ts = Timestamp::from_unix_millis(ms);
+        for ms in [0_i64, 1, 1_234_567_890_000, -1000] {
+            let ts = millis_to_system_time(ms);
             assert_eq!(s.from_bytes(&s.to_bytes(&ts), false).unwrap(), ts);
         }
     }

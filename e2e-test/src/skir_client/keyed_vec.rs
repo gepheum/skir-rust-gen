@@ -3,10 +3,11 @@ use std::hash::Hash;
 use std::ops::Deref;
 use std::sync::OnceLock;
 
-/// Extracts a lookup key from an element of type `T`.
-pub trait GetKey<T> {
+/// Extracts a lookup key from elements of an associated item type.
+pub trait GetKey {
+    type Item;
     type Key: Copy + Eq + Hash;
-    fn get_key(item: &T) -> Self::Key;
+    fn get_key(item: &Self::Item) -> Self::Key;
 }
 
 /// An immutable vector that supports O(1) lookup by key.
@@ -14,23 +15,17 @@ pub trait GetKey<T> {
 /// The index is built lazily on the first call to [`KeyedVec::find_by_key`] and
 /// cached for subsequent calls. Building and caching the index is thread-safe.
 ///
-/// `G` must implement [`GetKey<T>`], which extracts the lookup key from an
-/// element. When multiple elements share the same key, [`KeyedVec::find_by_key`]
-/// returns the first one.
-pub struct KeyedVec<T, G>
-where
-    G: GetKey<T>,
-{
-    items: Vec<T>,
+/// `G` must implement [`GetKey`], which defines both the element type and the
+/// lookup key type. When multiple elements share the same key,
+/// [`KeyedVec::find_by_key`] returns the first one.
+pub struct KeyedVec<G: GetKey> {
+    items: Vec<G::Item>,
     index: OnceLock<HashMap<G::Key, usize>>,
     _marker: std::marker::PhantomData<G>,
 }
 
-impl<T, G> KeyedVec<T, G>
-where
-    G: GetKey<T>,
-{
-    pub fn new(items: Vec<T>) -> Self {
+impl<G: GetKey> KeyedVec<G> {
+    pub fn new(items: Vec<G::Item>) -> Self {
         Self {
             items,
             index: OnceLock::new(),
@@ -41,7 +36,7 @@ where
     /// Returns the first element whose key equals `key`, or `None`.
     ///
     /// The index is built on the first call and reused on all subsequent calls.
-    pub fn find_by_key(&self, key: G::Key) -> Option<&T> {
+    pub fn find_by_key(&self, key: G::Key) -> Option<&G::Item> {
         let index = self.index.get_or_init(|| {
             let mut map = HashMap::with_capacity(self.items.len());
             for (i, item) in self.items.iter().enumerate() {
@@ -53,23 +48,17 @@ where
     }
 }
 
-impl<T, G> Deref for KeyedVec<T, G>
-where
-    G: GetKey<T>,
-{
-    type Target = [T];
+impl<G: GetKey> Deref for KeyedVec<G> {
+    type Target = [G::Item];
 
-    fn deref(&self) -> &[T] {
+    fn deref(&self) -> &[G::Item] {
         &self.items
     }
 }
 
-impl<'a, T, G> IntoIterator for &'a KeyedVec<T, G>
-where
-    G: GetKey<T>,
-{
-    type Item = &'a T;
-    type IntoIter = std::slice::Iter<'a, T>;
+impl<'a, G: GetKey> IntoIterator for &'a KeyedVec<G> {
+    type Item = &'a G::Item;
+    type IntoIter = std::slice::Iter<'a, G::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.items.iter()
@@ -87,14 +76,15 @@ mod tests {
 
     struct ItemById;
 
-    impl GetKey<Item> for ItemById {
+    impl GetKey for ItemById {
+        type Item = Item;
         type Key = u32;
         fn get_key(item: &Item) -> u32 {
             item.id
         }
     }
 
-    fn make_vec() -> KeyedVec<Item, ItemById> {
+    fn make_vec() -> KeyedVec<ItemById> {
         KeyedVec::new(vec![
             Item { id: 1, name: "one" },
             Item { id: 2, name: "two" },
@@ -119,7 +109,7 @@ mod tests {
 
     #[test]
     fn search_duplicate_key_returns_first_occurrence() {
-        let kv: KeyedVec<Item, ItemById> = KeyedVec::new(vec![
+        let kv: KeyedVec<ItemById> = KeyedVec::new(vec![
             Item { id: 42, name: "first" },
             Item { id: 42, name: "second" },
         ]);
@@ -129,7 +119,7 @@ mod tests {
 
     #[test]
     fn search_empty_vec_returns_none() {
-        let kv: KeyedVec<Item, ItemById> = KeyedVec::new(vec![]);
+        let kv: KeyedVec<ItemById> = KeyedVec::new(vec![]);
         assert!(kv.find_by_key(1).is_none());
     }
 
@@ -157,7 +147,7 @@ mod tests {
 
     #[test]
     fn is_empty_true_for_empty_vec() {
-        let kv: KeyedVec<Item, ItemById> = KeyedVec::new(vec![]);
+        let kv: KeyedVec<ItemById> = KeyedVec::new(vec![]);
         assert!(kv.is_empty());
     }
 

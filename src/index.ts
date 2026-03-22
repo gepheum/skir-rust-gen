@@ -1,8 +1,10 @@
 // TODO: serializer
 // TODO: refactor TypeDescriptor so parse_from_json is a static method
+// TODO: format rust code
 // TODO: comments
 // TODO: methods
 // TODO: constants
+// TODO: CI
 
 import {
   type CodeGenerator,

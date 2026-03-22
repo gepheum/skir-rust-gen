@@ -115,4 +115,5 @@ const GENERARATED_STRUCT_METHODS = new Set<string>([
   "default",
   "default_ref",
   "fmt",
+  "serializer",
 ]);

@@ -6,7 +6,6 @@ import {
   type Method,
   type RecordKey,
   type RecordLocation,
-  type ResolvedType,
   convertCase,
 } from "skir-internal";
 import { z } from "zod";
@@ -194,11 +193,23 @@ class RustSourceFileGenerator {
     );
     const typeName = getTypeName(record);
     this.push(
-      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq, std::default::Default)]\n`,
+      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,
     );
     this.push(`pub enum ${typeName} {\n`);
-    this.push("  #[default]\n");
-    this.push(`  Unknown,\n`);
+    this.push(
+      `  UnknownOrUnrecognized(crate::skir_client::unrecognized::UnrecognizedVariant<${typeName}>),\n`,
+    );
+    this.push("}\n\n");
+
+    this.push(`impl ${typeName} {\n`);
+    this.push(`  pub const Unknown: ${typeName} =\n`);
+    this.push(`    ${typeName}::UnknownOrUnrecognized(None);\n`);
+    this.push("}\n\n");
+
+    this.push(`impl std::default::Default for ${typeName} {\n`);
+    this.push(`  fn default() -> Self {\n`);
+    this.push(`    Self::Unknown\n`);
+    this.push("  }\n");
     this.push("}\n\n");
   }
 
@@ -283,13 +294,6 @@ class RustSourceFileGenerator {
         };
       }
     }
-  }
-
-  private isStructType(type: ResolvedType): boolean {
-    return (
-      type.kind === "record" &&
-      this.typeSpeller.recordMap.get(type.key)?.record.recordType === "struct"
-    );
   }
 
   private pushSeparator(header: string): void {

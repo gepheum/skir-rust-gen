@@ -20,7 +20,7 @@ pub struct UnrecognizedFieldsData<T> {
 }
 
 /// Stores an unrecognized enum variant encountered while deserializing.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct UnrecognizedVariantData<T> {
     pub(super) format: UnrecognizedFormat,
     /// Wire number of the unrecognized variant.

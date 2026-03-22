@@ -29,7 +29,6 @@ trait FieldEntry<T>: Send + Sync {
     ) -> Result<(), String>;
     fn encode_entry(&self, frozen: &T, out: &mut Vec<u8>);
     fn decode_entry(&self, value: &mut T, input: &mut &[u8], keep_unrecognized: bool);
-    fn clone_box(&self) -> Box<dyn FieldEntry<T>>;
 }
 
 struct TypedField<T: 'static, V: 'static> {
@@ -87,16 +86,6 @@ impl<T: 'static, V: 'static> FieldEntry<T> for TypedField<T, V> {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn FieldEntry<T>> {
-        Box::new(TypedField {
-            name: self.name.clone(),
-            number: self.number,
-            doc: self.doc.clone(),
-            adapter: self.adapter.clone(),
-            getter: self.getter,
-            setter: self.setter,
-        })
-    }
 }
 
 // =============================================================================

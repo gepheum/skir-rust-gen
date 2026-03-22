@@ -27,8 +27,6 @@ enum AnyEntry {
 // =============================================================================
 
 trait VariantEntry<T>: Send + Sync {
-    fn kind_ordinal(&self) -> usize;
-    fn name(&self) -> &str;
     fn number(&self) -> i32;
     fn is_wrapper(&self) -> bool;
     /// Returns the enum value for a constant variant.
@@ -37,7 +35,6 @@ trait VariantEntry<T>: Send + Sync {
     fn encode_value(&self, frozen: &T, out: &mut Vec<u8>);
     fn wrap_from_json(&self, v: &serde_json::Value, keep: bool) -> Result<T, String>;
     fn wrap_decode(&self, input: &mut &[u8], keep: bool) -> Result<T, String>;
-    fn clone_box(&self) -> Box<dyn VariantEntry<T>>;
 }
 
 // =============================================================================
@@ -45,19 +42,12 @@ trait VariantEntry<T>: Send + Sync {
 // =============================================================================
 
 struct ConstantEntry<T: 'static> {
-    kind_ordinal: usize,
     name: String,
     number: i32,
     instance_fn: fn() -> T,
 }
 
 impl<T: 'static> VariantEntry<T> for ConstantEntry<T> {
-    fn kind_ordinal(&self) -> usize {
-        self.kind_ordinal
-    }
-    fn name(&self) -> &str {
-        &self.name
-    }
     fn number(&self) -> i32 {
         self.number
     }
@@ -90,14 +80,6 @@ impl<T: 'static> VariantEntry<T> for ConstantEntry<T> {
         Err(format!("variant '{}' is a constant, not a wrapper", self.name))
     }
 
-    fn clone_box(&self) -> Box<dyn VariantEntry<T>> {
-        Box::new(ConstantEntry {
-            kind_ordinal: self.kind_ordinal,
-            name: self.name.clone(),
-            number: self.number,
-            instance_fn: self.instance_fn,
-        })
-    }
 }
 
 // =============================================================================
@@ -105,7 +87,6 @@ impl<T: 'static> VariantEntry<T> for ConstantEntry<T> {
 // =============================================================================
 
 struct WrapperEntry<T: 'static, V: 'static> {
-    kind_ordinal: usize,
     name: String,
     number: i32,
     ser: Serializer<V>,
@@ -114,12 +95,6 @@ struct WrapperEntry<T: 'static, V: 'static> {
 }
 
 impl<T: 'static, V: 'static> VariantEntry<T> for WrapperEntry<T, V> {
-    fn kind_ordinal(&self) -> usize {
-        self.kind_ordinal
-    }
-    fn name(&self) -> &str {
-        &self.name
-    }
     fn number(&self) -> i32 {
         self.number
     }
@@ -170,16 +145,6 @@ impl<T: 'static, V: 'static> VariantEntry<T> for WrapperEntry<T, V> {
         Ok((self.wrap)(inner))
     }
 
-    fn clone_box(&self) -> Box<dyn VariantEntry<T>> {
-        Box::new(WrapperEntry {
-            kind_ordinal: self.kind_ordinal,
-            name: self.name.clone(),
-            number: self.number,
-            ser: self.ser.clone(),
-            wrap: self.wrap,
-            get_value: self.get_value,
-        })
-    }
 }
 
 // =============================================================================
@@ -255,7 +220,6 @@ impl<T: 'static + Default> EnumAdapter<T> {
         self.number_to_entry.insert(number, AnyEntry::Constant(kind_ordinal));
         self.name_to_kind_ordinal.insert(name.to_string(), kind_ordinal);
         let entry: Box<dyn VariantEntry<T>> = Box::new(ConstantEntry {
-            kind_ordinal,
             name: name.to_string(),
             number,
             instance_fn,
@@ -283,7 +247,6 @@ impl<T: 'static + Default> EnumAdapter<T> {
         self.number_to_entry.insert(number, AnyEntry::Wrapper(kind_ordinal));
         self.name_to_kind_ordinal.insert(name.to_string(), kind_ordinal);
         let entry: Box<dyn VariantEntry<T>> = Box::new(WrapperEntry {
-            kind_ordinal,
             name: name.to_string(),
             number,
             ser,

@@ -91,5 +91,5 @@ const RESERVED_KEYWORDS = new Set<string>([
 const GENERARATED_STRUCT_METHODS = new Set<string>([
   "clone",
   "default",
-  "defaultRef",
+  "default_ref",
 ]);

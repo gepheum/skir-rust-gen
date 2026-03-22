@@ -10,7 +10,6 @@ import {
   convertCase,
   type Doc,
   type Field,
-  type FieldPath,
   type Method,
   type RecordKey,
   type RecordLocation,
@@ -18,13 +17,16 @@ import {
 } from "skir-internal";
 import { z } from "zod";
 import {
+  createKeyedArrayContext,
+  KeyedArrayContext,
+} from "./keyed_array_context.js";
+import {
   getTypeName,
   isUpperCasedKeyword,
   toStructFieldName,
 } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
-import { createKeyedArrayContext, KeyedArrayContext } from "./keyed_array_context.js";
 
 const Config = z.strictObject({});
 
@@ -38,17 +40,15 @@ class RustCodeGenerator implements CodeGenerator<Config> {
     const { recordMap, config } = input;
     const keyedArrayContext = createKeyedArrayContext(input.modules);
     const rustModuleSpecs = collectRustModuleSpecs(input.modules);
-    const outputFiles = rustModuleSpecs.map((moduleSpec) => (
-      {
-        path: moduleSpec.path,
-        code: new RustSourceFileGenerator(
-          moduleSpec,
-          recordMap,
-          keyedArrayContext,
-          config,
-        ).generate(),
-      }
-    ));
+    const outputFiles = rustModuleSpecs.map((moduleSpec) => ({
+      path: moduleSpec.path,
+      code: new RustSourceFileGenerator(
+        moduleSpec,
+        recordMap,
+        keyedArrayContext,
+        config,
+      ).generate(),
+    }));
     return { files: outputFiles };
   }
 }
@@ -153,14 +153,14 @@ class RustSourceFileGenerator {
     );
     this.push("}\n\n");
 
-    // impl block: defaultRef() + getters for hard-recursive fields
+    // impl block: default_ref() + getters for hard-recursive fields
     const hardRecursiveFields = struct.record.fields.filter(
       (f) => f.isRecursive === "hard",
     );
     this.push(`impl ${typeName} {\n`);
 
-    // defaultRef()
-    this.push(`  pub fn defaultRef() -> &'static ${typeName} {\n`);
+    // default_ref()
+    this.push(`  pub fn default_ref() -> &'static ${typeName} {\n`);
     this.push(
       `    static D: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(${typeName}::default);\n`,
     );
@@ -174,7 +174,7 @@ class RustSourceFileGenerator {
       this.push(`  pub fn ${fieldName}(&self) -> &${fieldType} {\n`);
       this.push(`    match &self._${field.name.text}_rec {\n`);
       this.push(`      Some(boxed) => boxed.as_ref(),\n`);
-      this.push(`      None => ${fieldType}::defaultRef(),\n`);
+      this.push(`      None => ${fieldType}::default_ref(),\n`);
       this.push("    }\n");
       this.push("  }\n");
     }
@@ -205,9 +205,17 @@ class RustSourceFileGenerator {
     const keyedArrayExtractors =
       this.keyedArrayContext.recordKeyToKeyExtractors.get(struct.record.key);
     for (const fieldPath of keyedArrayExtractors?.values() ?? []) {
-      const implName = typeName.concat("_by").concat(fieldPath.path.map((p) => convertCase(p.name.text, "UpperCamel")).join("_"));
+      const implName = typeName
+        .concat("_by")
+        .concat(
+          fieldPath.path
+            .map((p) => convertCase(p.name.text, "UpperCamel"))
+            .join("_"),
+        );
       this.push(`struct ${implName};\n\n`);
-      this.push(`impl crate::skir_client::keyed_vec::GetKey for ${implName} {\n`);
+      this.push(
+        `impl crate::skir_client::keyed_vec::GetKey for ${implName} {\n`,
+      );
       this.push(`  type Item = ${typeName};\n`);
       this.push("}\n\n");
     }

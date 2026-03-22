@@ -23,11 +23,8 @@ export function createKeyedArrayContext(
   const recordKeyToKeyExtractors = new Map<RecordKey, Map<string, FieldPath>>();
   const enumsUsedAsKeys = new Set<RecordKey>();
   const processType = (type: ResolvedType | undefined): void => {
-    if (type?.kind !== "array" || !type.key)
-      return;
-    const keyExtractor = type.key.path
-      .map((part) => part.name.text)
-      .join(".");
+    if (type?.kind !== "array" || !type.key) return;
+    const keyExtractor = type.key.path.map((part) => part.name.text).join(".");
     const { item } = type;
     if (item.kind !== "record") {
       throw new TypeError();

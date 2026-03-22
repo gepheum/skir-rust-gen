@@ -1,3 +1,6 @@
+// defaultRef() -> default_ref()?
+// find_by_key_or_default()?
+// TODO: make unreocgnized fields Option, instead of defining the Option in the client lib as a typedef
 // Possibly add the `kind` to the enum if needed by KeyedVec
 // Possibly add the GetKey implementations...
 
@@ -7,10 +10,11 @@ import {
   convertCase,
   type Doc,
   type Field,
+  type FieldPath,
   type Method,
   type RecordKey,
   type RecordLocation,
-  ResolvedType,
+  type ResolvedType,
 } from "skir-internal";
 import { z } from "zod";
 import {
@@ -20,6 +24,7 @@ import {
 } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { TypeSpeller } from "./type_speller.js";
+import { createKeyedArrayContext, KeyedArrayContext } from "./keyed_array_context.js";
 
 const Config = z.strictObject({});
 
@@ -31,18 +36,19 @@ class RustCodeGenerator implements CodeGenerator<Config> {
 
   generateCode(input: CodeGenerator.Input<Config>): CodeGenerator.Output {
     const { recordMap, config } = input;
-    const outputFiles: CodeGenerator.OutputFile[] = [];
+    const keyedArrayContext = createKeyedArrayContext(input.modules);
     const rustModuleSpecs = collectRustModuleSpecs(input.modules);
-    for (const moduleSpec of rustModuleSpecs) {
-      outputFiles.push({
+    const outputFiles = rustModuleSpecs.map((moduleSpec) => (
+      {
         path: moduleSpec.path,
         code: new RustSourceFileGenerator(
           moduleSpec,
           recordMap,
+          keyedArrayContext,
           config,
         ).generate(),
-      });
-    }
+      }
+    ));
     return { files: outputFiles };
   }
 }
@@ -52,6 +58,7 @@ class RustSourceFileGenerator {
   constructor(
     private readonly moduleSpec: RustModuleSpec,
     recordMap: ReadonlyMap<RecordKey, RecordLocation>,
+    private readonly keyedArrayContext: KeyedArrayContext,
     private readonly config: Config,
   ) {
     this.typeSpeller = new TypeSpeller(recordMap, moduleSpec.skirModule?.path);
@@ -191,6 +198,17 @@ class RustSourceFileGenerator {
       this.push(`      _unrecognized: None,\n`);
       this.push("    }\n");
       this.push("  }\n");
+      this.push("}\n\n");
+    }
+
+    // Write a GetKey impl for each keyed array that has this struct as item type.
+    const keyedArrayExtractors =
+      this.keyedArrayContext.recordKeyToKeyExtractors.get(struct.record.key);
+    for (const fieldPath of keyedArrayExtractors?.values() ?? []) {
+      const implName = typeName.concat("_by").concat(fieldPath.path.map((p) => convertCase(p.name.text, "UpperCamel")).join("_"));
+      this.push(`struct ${implName};\n\n`);
+      this.push(`impl crate::skir_client::keyed_vec::GetKey for ${implName} {\n`);
+      this.push(`  type Item = ${typeName};\n`);
       this.push("}\n\n");
     }
   }

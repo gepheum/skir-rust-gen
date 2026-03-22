@@ -173,6 +173,10 @@ pub struct EnumConstantVariant {
 }
 
 impl EnumConstantVariant {
+    pub(super) fn new(name: String, number: i32, doc: String) -> Self {
+        EnumConstantVariant { name, number, doc }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -194,6 +198,15 @@ pub struct EnumWrapperVariant {
 }
 
 impl EnumWrapperVariant {
+    pub(super) fn new(
+        name: String,
+        number: i32,
+        variant_type: TypeDescriptor,
+        doc: String,
+    ) -> Self {
+        EnumWrapperVariant { name, number, variant_type, doc }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -368,7 +381,7 @@ pub struct EnumDescriptor {
 }
 
 impl EnumDescriptor {
-    fn new(
+    pub(super) fn new(
         module_path: String,
         qualified_name: String,
         doc: String,
@@ -405,6 +418,12 @@ impl EnumDescriptor {
     }
     pub fn variants(&self) -> &[EnumVariant] {
         self.variants.get().expect("EnumDescriptor variants not yet initialized")
+    }
+
+    /// Called once by [`enum_adapter::EnumAdapter::into_serializer`] after all
+    /// variants have been registered. Silently ignored if called more than once.
+    pub(super) fn set_variants(&self, variants: Vec<EnumVariant>) {
+        self.variants.set(variants).ok();
     }
 
     fn record_id(&self) -> String {

@@ -1,6 +1,7 @@
 // TODO: serializer
 // TODO: refactor TypeDescriptor so parse_from_json is a static method
 // TODO: format rust code
+// TODO: export Rust code at top-level in Skir client
 // TODO: comments
 // TODO: methods
 // TODO: constants

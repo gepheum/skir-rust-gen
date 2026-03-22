@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use super::super::reflection::{StructDescriptor, StructField, TypeDescriptor};
 use super::super::serializer::{Serializer, TypeAdapter};
-use super::super::serializers::{decode_number, encode_uint32, read_u8};
+use super::super::serializers::{decode_number, encode_uint32, read_u8, skip_value};
 use super::super::unrecognized::{UnrecognizedFieldsData, UnrecognizedFormat};
 
 // =============================================================================
@@ -582,79 +582,6 @@ impl<T: 'static> TypeAdapter<T> for StructAdapterWrapper<T>
     fn clone_box(&self) -> Box<dyn TypeAdapter<T>> {
         Box::new(StructAdapterWrapper(Arc::clone(&self.0)))
     }
-}
-
-// =============================================================================
-// skip_value – advance past one encoded value without decoding it
-// =============================================================================
-
-/// Advances `input` past one complete encoded value without decoding it.
-/// Used for removed fields and for unrecognized fields from a newer schema.
-fn skip_value(input: &mut &[u8]) -> Result<(), String> {
-    let wire = read_u8(input)?;
-    match wire {
-        0..=231 => {
-            // Single-byte value; already consumed.
-        }
-        232 | 236 => {
-            // 2-byte payload
-            if input.len() < 2 {
-                return Err("unexpected end of input in skip_value".to_string());
-            }
-            *input = &input[2..];
-        }
-        233 | 237 | 240 => {
-            // 4-byte payload
-            if input.len() < 4 {
-                return Err("unexpected end of input in skip_value".to_string());
-            }
-            *input = &input[4..];
-        }
-        234 | 238 | 239 | 241 => {
-            // 8-byte payload
-            if input.len() < 8 {
-                return Err("unexpected end of input in skip_value".to_string());
-            }
-            *input = &input[8..];
-        }
-        235 => {
-            // 1-byte payload
-            if input.is_empty() {
-                return Err("unexpected end of input in skip_value".to_string());
-            }
-            *input = &input[1..];
-        }
-        242 | 244 | 246 => {
-            // Empty string, empty bytes, or empty array/struct: nothing further.
-        }
-        243 | 245 => {
-            // String or bytes with length prefix followed by N bytes.
-            let n = decode_number(input)? as usize;
-            if input.len() < n {
-                return Err("unexpected end of input in skip_value".to_string());
-            }
-            *input = &input[n..];
-        }
-        247 | 248 | 249 => {
-            let n = (wire as usize) - 246;
-            for _ in 0..n {
-                skip_value(input)?;
-            }
-        }
-        250 => {
-            let n = decode_number(input)? as usize;
-            for _ in 0..n {
-                skip_value(input)?;
-            }
-        }
-        255 => {
-            // Optional absent: nothing further.
-        }
-        _ => {
-            // Unknown wire type; best effort: skip nothing.
-        }
-    }
-    Ok(())
 }
 
 // =============================================================================

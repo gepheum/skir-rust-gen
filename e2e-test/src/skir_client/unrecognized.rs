@@ -56,6 +56,30 @@ pub struct UnrecognizedVariantData<T> {
     _phantom: PhantomData<T>,
 }
 
+impl<T> UnrecognizedVariantData<T> {
+    /// Creates an [`UnrecognizedVariant`] for an unrecognized constant variant
+    /// from a JSON number-like context.  `raw_bytes` is the re-encoded number.
+    pub(super) fn new_from_bytes(number: i32, raw_bytes: Vec<u8>) -> Box<Self> {
+        Box::new(UnrecognizedVariantData {
+            format: UnrecognizedFormat::Bytes,
+            number,
+            value: raw_bytes,
+            _phantom: PhantomData,
+        })
+    }
+
+    /// Creates an [`UnrecognizedVariant`] for an unrecognized variant carrying
+    /// a JSON-encoded value (wrapper variant or raw JSON element).
+    pub(super) fn new_from_json(number: i32, json_bytes: Vec<u8>) -> Box<Self> {
+        Box::new(UnrecognizedVariantData {
+            format: UnrecognizedFormat::DenseJson,
+            number,
+            value: json_bytes,
+            _phantom: PhantomData,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) enum UnrecognizedFormat {
     #[default]

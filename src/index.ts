@@ -182,9 +182,10 @@ class RustSourceFileGenerator {
     );
     const typeName = getTypeName(record);
     this.push(
-      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq)]\n`,
+      `#[derive(std::fmt::Debug, std::clone::Clone, std::cmp::PartialEq, std::default::Default)]\n`,
     );
     this.push(`pub enum ${typeName} {\n`);
+    this.push("  #[default]\n");
     this.push(`  Unknown,\n`);
     this.push("}\n\n");
   }

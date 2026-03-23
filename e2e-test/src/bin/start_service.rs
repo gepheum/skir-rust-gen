@@ -57,30 +57,29 @@ async fn main() {
                 }
             })
             .expect("duplicate method number")
-            .add_method(
-                add_user_method(),
-                move |req: AddUserRequest, _meta: ()| {
-                    let store = store_for_add.clone();
-                    async move {
-                        if req.user.name.is_empty() {
-                            return Err(ServiceError::bad_request("user name must not be empty"));
-                        }
-                        let mut store = store.lock().unwrap();
-                        let user_id = req.user.user_id;
-                        store.id_to_user.insert(user_id, req.user);
-                        Ok(AddUserResponse {
-                            _unrecognized: None,
-                        })
+            .add_method(add_user_method(), move |req: AddUserRequest, _meta: ()| {
+                let store = store_for_add.clone();
+                async move {
+                    if req.user.name.is_empty() {
+                        return Err(ServiceError::bad_request("user name must not be empty"));
                     }
-                },
-            )
+                    let mut store = store.lock().unwrap();
+                    let user_id = req.user.user_id;
+                    store.id_to_user.insert(user_id, req.user);
+                    Ok(AddUserResponse {
+                        _unrecognized: None,
+                    })
+                }
+            })
             .expect("duplicate method number")
             .set_can_send_unknown_error_message(true)
             .build(),
     );
 
     let addr = "127.0.0.1:8787";
-    let listener = TcpListener::bind(addr).await.expect("failed to bind address");
+    let listener = TcpListener::bind(addr)
+        .await
+        .expect("failed to bind address");
     println!("Skir service listening on http://{addr}/myapi");
     println!("Open http://{addr}/myapi in a browser to try Skir Studio.");
     println!("Press Ctrl+C to stop.");
@@ -139,7 +138,13 @@ async fn handle_connection(
     // ── Route check: only serve /myapi ────────────────────────────────────────
     let path = raw_path.split('?').next().unwrap_or("/");
     if path != "/myapi" {
-        write_response(&mut write_half, 404, "text/plain; charset=utf-8", b"Not Found").await;
+        write_response(
+            &mut write_half,
+            404,
+            "text/plain; charset=utf-8",
+            b"Not Found",
+        )
+        .await;
         return;
     }
 
@@ -154,7 +159,13 @@ async fn handle_connection(
         } else {
             let mut buf = vec![0u8; len];
             if reader.read_exact(&mut buf).await.is_err() {
-                write_response(&mut write_half, 400, "text/plain; charset=utf-8", b"Bad Request").await;
+                write_response(
+                    &mut write_half,
+                    400,
+                    "text/plain; charset=utf-8",
+                    b"Bad Request",
+                )
+                .await;
                 return;
             }
             String::from_utf8(buf).unwrap_or_default()

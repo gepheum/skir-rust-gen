@@ -142,31 +142,45 @@ pub enum ServiceError {
 impl ServiceError {
     /// Creates a `ServiceError::Http` with status 400 Bad Request.
     pub fn bad_request(msg: impl Into<String>) -> Self {
-        Self::Http { status_code: HttpErrorCode::_400_BadRequest, message: msg.into(), source: None }
+        Self::Http {
+            status_code: HttpErrorCode::_400_BadRequest,
+            message: msg.into(),
+            source: None,
+        }
     }
 
     /// Creates a `ServiceError::Http` with status 403 Forbidden.
     pub fn forbidden(msg: impl Into<String>) -> Self {
-        Self::Http { status_code: HttpErrorCode::_403_Forbidden, message: msg.into(), source: None }
+        Self::Http {
+            status_code: HttpErrorCode::_403_Forbidden,
+            message: msg.into(),
+            source: None,
+        }
     }
 
     /// Creates a `ServiceError::Http` with status 404 Not Found.
     pub fn not_found(msg: impl Into<String>) -> Self {
-        Self::Http { status_code: HttpErrorCode::_404_NotFound, message: msg.into(), source: None }
+        Self::Http {
+            status_code: HttpErrorCode::_404_NotFound,
+            message: msg.into(),
+            source: None,
+        }
     }
 
     /// Creates a `ServiceError::Http` with status 500 Internal Server Error.
     pub fn internal(msg: impl Into<String>) -> Self {
-        Self::Http { status_code: HttpErrorCode::_500_InternalServerError, message: msg.into(), source: None }
+        Self::Http {
+            status_code: HttpErrorCode::_500_InternalServerError,
+            message: msg.into(),
+            source: None,
+        }
     }
 
     /// Returns the source error, if any.
     ///
     /// For [`ServiceError::Unknown`] this is always `Some`. For
     /// [`ServiceError::Http`] it is `Some` only when a source was provided.
-    pub fn source_error(
-        &self,
-    ) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
+    pub fn source_error(&self) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
         match self {
             ServiceError::Unknown(e) => Some(e.as_ref()),
             ServiceError::Http { source, .. } => source.as_deref(),
@@ -178,7 +192,11 @@ impl std::fmt::Display for ServiceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ServiceError::Unknown(_) => write!(f, "unknown service error"),
-            ServiceError::Http { status_code, message, .. } => {
+            ServiceError::Http {
+                status_code,
+                message,
+                ..
+            } => {
                 write!(f, "service error ({}): {}", status_code.as_u16(), message)
             }
         }
@@ -187,7 +205,8 @@ impl std::fmt::Display for ServiceError {
 
 impl std::error::Error for ServiceError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source_error().map(|e| e as &(dyn std::error::Error + 'static))
+        self.source_error()
+            .map(|e| e as &(dyn std::error::Error + 'static))
     }
 }
 
@@ -414,7 +433,11 @@ where
                 (self.error_logger)(&info);
 
                 match &e {
-                    ServiceError::Http { status_code, message, .. } => {
+                    ServiceError::Http {
+                        status_code,
+                        message,
+                        ..
+                    } => {
                         let msg = if message.is_empty() {
                             http_status_text(status_code.as_u16()).to_owned()
                         } else {
@@ -531,7 +554,9 @@ where
                                 source: None,
                             };
                             return Box::pin(async move { Err(err) })
-                                as Pin<Box<dyn Future<Output = Result<String, ServiceError>> + Send>>;
+                                as Pin<
+                                    Box<dyn Future<Output = Result<String, ServiceError>> + Send>,
+                                >;
                         }
                     };
                     let fut = impl_fn(req, meta);
@@ -544,7 +569,8 @@ where
                             JsonFlavor::Dense
                         };
                         Ok(resp_serializer.to_json(&resp, flavor))
-                    }) as Pin<Box<dyn Future<Output = Result<String, ServiceError>> + Send>>
+                    })
+                        as Pin<Box<dyn Future<Output = Result<String, ServiceError>> + Send>>
                 },
             ),
         };

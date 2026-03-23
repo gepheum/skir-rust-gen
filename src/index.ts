@@ -5,7 +5,6 @@
 // TODO: if I have a recursive fiedld, Equal() is not working...
 //   TODO: I think I may want to create my own Rec<>...
 // TODO: comments (in code, in runtime, )
-// TODO: look at UTF-8 safety
 // TODO: SkiRPC
 // TODO: CI
 
@@ -493,7 +492,40 @@ class RustSourceFileGenerator {
   private writeMethod(method: Method): void {}
 
   private writeConstant(constant: Constant): void {
-    const { namer, typeSpeller } = this;
+    const { typeSpeller } = this;
+    const rustName = convertCase(constant.name.text, "lower_underscore").concat(
+      "_const",
+    );
+    const type = constant.type!;
+    this.push(commentify(docToCommentText(constant.doc)));
+    const rustLiteral = tryGetRustLiteral(constant);
+    if (rustLiteral !== null) {
+      // This type can be represented as a real Rust const.
+      // String primitives must use &'static str because String is not
+      // const-eligible in Rust.
+      const constType =
+        type.kind === "primitive" && type.primitive === "string"
+          ? "&'static str"
+          : typeSpeller.getRustType(type);
+      this.push(`pub const ${rustName}: ${constType} = ${rustLiteral};\n\n`);
+    } else {
+      // Use LazyLock for lazy initialization from JSON.
+      const rustType = typeSpeller.getRustType(type);
+      const serializerExpr = typeSpeller.getSerializerExpression(type, null);
+      const jsonLiteral = toRustStringLiteral(
+        JSON.stringify(constant.valueAsDenseJson),
+      );
+      this.push(`pub fn ${rustName}() -> &'static ${rustType} {\n`);
+      this.push(
+        `static VALUE: std::sync::LazyLock<${rustType}> = std::sync::LazyLock::new(|| {\n`,
+      );
+      this.push(
+        `${serializerExpr}.from_json(${jsonLiteral}, false).unwrap()\n`,
+      );
+      this.push("});\n");
+      this.push("&*VALUE\n");
+      this.push("}\n\n");
+    }
   }
 
   private pushSeparator(header: string): void {

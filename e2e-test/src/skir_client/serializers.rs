@@ -5,71 +5,71 @@ use super::reflection::{ArrayDescriptor, PrimitiveType, TypeDescriptor};
 use super::serializer::{Serializer, TypeAdapter};
 
 // =============================================================================
-// Public serializer constructors
+// Public serializer constructors (static factory methods on Serializer)
 // =============================================================================
 
-/// Returns a [`Serializer`] for `bool` values.
-pub fn bool_serializer() -> Serializer<bool> {
-    Serializer::new(BoolAdapter)
+impl Serializer<bool> {
+    /// Returns a [`Serializer`] for `bool` values.
+    pub fn bool() -> Self { Serializer::new(BoolAdapter) }
 }
 
-/// Returns a [`Serializer`] for `i32` values.
-pub fn int32_serializer() -> Serializer<i32> {
-    Serializer::new(Int32Adapter)
+impl Serializer<i32> {
+    /// Returns a [`Serializer`] for `i32` values.
+    pub fn int32() -> Self { Serializer::new(Int32Adapter) }
 }
 
-/// Returns a [`Serializer`] for `i64` values.
-pub fn int64_serializer() -> Serializer<i64> {
-    Serializer::new(Int64Adapter)
+impl Serializer<i64> {
+    /// Returns a [`Serializer`] for `i64` values.
+    pub fn int64() -> Self { Serializer::new(Int64Adapter) }
 }
 
-/// Returns a [`Serializer`] for `u64` hash values.
-pub fn hash64_serializer() -> Serializer<u64> {
-    Serializer::new(Hash64Adapter)
+impl Serializer<u64> {
+    /// Returns a [`Serializer`] for `u64` hash values.
+    pub fn hash64() -> Self { Serializer::new(Hash64Adapter) }
 }
 
-/// Returns a [`Serializer`] for `f32` values.
-pub fn float32_serializer() -> Serializer<f32> {
-    Serializer::new(Float32Adapter)
+impl Serializer<f32> {
+    /// Returns a [`Serializer`] for `f32` values.
+    pub fn float32() -> Self { Serializer::new(Float32Adapter) }
 }
 
-/// Returns a [`Serializer`] for `f64` values.
-pub fn float64_serializer() -> Serializer<f64> {
-    Serializer::new(Float64Adapter)
+impl Serializer<f64> {
+    /// Returns a [`Serializer`] for `f64` values.
+    pub fn float64() -> Self { Serializer::new(Float64Adapter) }
 }
 
-/// Returns a [`Serializer`] for [`SystemTime`] values (unix-millisecond timestamps).
-pub fn timestamp_serializer() -> Serializer<SystemTime> {
-    Serializer::new(TimestampAdapter)
+impl Serializer<SystemTime> {
+    /// Returns a [`Serializer`] for [`SystemTime`] values (unix-millisecond timestamps).
+    pub fn timestamp() -> Self { Serializer::new(TimestampAdapter) }
 }
 
-/// Returns a [`Serializer`] for `String` values.
-pub fn string_serializer() -> Serializer<String> {
-    Serializer::new(StringAdapter)
+impl Serializer<String> {
+    /// Returns a [`Serializer`] for `String` values.
+    pub fn string() -> Self { Serializer::new(StringAdapter) }
 }
 
-/// Returns a [`Serializer`] for `Vec<u8>` (bytes) values.
-pub fn bytes_serializer() -> Serializer<Vec<u8>> {
-    Serializer::new(BytesAdapter)
+impl Serializer<Vec<u8>> {
+    /// Returns a [`Serializer`] for `Vec<u8>` (bytes) values.
+    pub fn bytes() -> Self { Serializer::new(BytesAdapter) }
 }
 
-/// Returns a [`Serializer`] for `Vec<T>` arrays.
-pub fn array_serializer<T: 'static>(item: Serializer<T>) -> Serializer<Vec<T>> {
-    Serializer::new(ArrayAdapter { item })
+impl<T: 'static> Serializer<Vec<T>> {
+    /// Returns a [`Serializer`] for `Vec<T>` arrays.
+    pub fn array(item: Serializer<T>) -> Self { Serializer::new(ArrayAdapter { item }) }
 }
 
-/// Returns a [`Serializer`] for [`KeyedVec<S>`] arrays.
-pub fn keyed_array_serializer<S: KeyedVecSpec + 'static>(
-    item: Serializer<S::Item>,
-) -> Serializer<KeyedVec<S>> {
-    Serializer::new(KeyedArrayAdapter { item })
+impl<S: KeyedVecSpec + 'static> Serializer<KeyedVec<S>> {
+    /// Returns a [`Serializer`] for [`KeyedVec<S>`] arrays.
+    pub fn keyed_array(item: Serializer<S::Item>) -> Self {
+        Serializer::new(KeyedArrayAdapter { item })
+    }
 }
 
-/// Returns a [`Serializer`] for `Option<T>` values.
-///
-/// `None` → JSON `null` / wire `0xff`; `Some(v)` delegates to the inner serializer.
-pub fn optional_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Option<T>> {
-    Serializer::new(OptionalAdapter { other })
+impl<T: 'static> Serializer<Option<T>> {
+    /// Returns a [`Serializer`] for `Option<T>` values.
+    ///
+    /// `None` → JSON `null` / wire `0xff`; `Some(v)` delegates to the inner serializer.
+    pub fn optional(other: Serializer<T>) -> Self { Serializer::new(OptionalAdapter { other }) }
 }
 
 pub mod internal {
@@ -1448,98 +1448,98 @@ mod tests {
 
     #[test]
     fn to_json_dense_true() {
-        assert_eq!(bool_serializer().to_json(&true, JsonFlavor::Dense), "1");
+        assert_eq!(Serializer::bool().to_json(&true, JsonFlavor::Dense), "1");
     }
 
     #[test]
     fn to_json_dense_false() {
-        assert_eq!(bool_serializer().to_json(&false, JsonFlavor::Dense), "0");
+        assert_eq!(Serializer::bool().to_json(&false, JsonFlavor::Dense), "0");
     }
 
     #[test]
     fn to_json_readable_true() {
-        assert_eq!(bool_serializer().to_json(&true, JsonFlavor::Readable), "true");
+        assert_eq!(Serializer::bool().to_json(&true, JsonFlavor::Readable), "true");
     }
 
     #[test]
     fn to_json_readable_false() {
-        assert_eq!(bool_serializer().to_json(&false, JsonFlavor::Readable), "false");
+        assert_eq!(Serializer::bool().to_json(&false, JsonFlavor::Readable), "false");
     }
 
     // ── from_json ─────────────────────────────────────────────────────────────
 
     #[test]
     fn from_json_bool_literal() {
-        let s = bool_serializer();
+        let s = Serializer::bool();
         assert_eq!(s.from_json("true", UnrecognizedValues::Drop).unwrap(), true);
         assert_eq!(s.from_json("false", UnrecognizedValues::Drop).unwrap(), false);
     }
 
     #[test]
     fn from_json_number_1_and_0() {
-        let s = bool_serializer();
+        let s = Serializer::bool();
         assert_eq!(s.from_json("1", UnrecognizedValues::Drop).unwrap(), true);
         assert_eq!(s.from_json("0", UnrecognizedValues::Drop).unwrap(), false);
     }
 
     #[test]
     fn from_json_number_nonzero() {
-        assert_eq!(bool_serializer().from_json("42", UnrecognizedValues::Drop).unwrap(), true);
+        assert_eq!(Serializer::bool().from_json("42", UnrecognizedValues::Drop).unwrap(), true);
     }
 
     #[test]
     fn from_json_float_zero() {
-        assert_eq!(bool_serializer().from_json("0.0", UnrecognizedValues::Drop).unwrap(), false);
+        assert_eq!(Serializer::bool().from_json("0.0", UnrecognizedValues::Drop).unwrap(), false);
     }
 
     #[test]
     fn from_json_string_zero_is_false() {
         // The string "0" is the only falsy string value.
-        assert_eq!(bool_serializer().from_json(r#""0""#, UnrecognizedValues::Drop).unwrap(), false);
+        assert_eq!(Serializer::bool().from_json(r#""0""#, UnrecognizedValues::Drop).unwrap(), false);
     }
 
     #[test]
     fn from_json_string_nonzero_is_true() {
-        assert_eq!(bool_serializer().from_json(r#""1""#, UnrecognizedValues::Drop).unwrap(), true);
-        assert_eq!(bool_serializer().from_json(r#""true""#, UnrecognizedValues::Drop).unwrap(), true);
+        assert_eq!(Serializer::bool().from_json(r#""1""#, UnrecognizedValues::Drop).unwrap(), true);
+        assert_eq!(Serializer::bool().from_json(r#""true""#, UnrecognizedValues::Drop).unwrap(), true);
     }
 
     #[test]
     fn from_json_null_is_false() {
-        assert_eq!(bool_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), false);
+        assert_eq!(Serializer::bool().from_json("null", UnrecognizedValues::Drop).unwrap(), false);
     }
 
     // ── binary round-trip ─────────────────────────────────────────────────────
 
     #[test]
     fn binary_round_trip_true() {
-        let s = bool_serializer();
+        let s = Serializer::bool();
         let bytes = s.to_bytes(&true);
         assert_eq!(s.from_bytes(&bytes, UnrecognizedValues::Drop).unwrap(), true);
     }
 
     #[test]
     fn binary_round_trip_false() {
-        let s = bool_serializer();
+        let s = Serializer::bool();
         let bytes = s.to_bytes(&false);
         assert_eq!(s.from_bytes(&bytes, UnrecognizedValues::Drop).unwrap(), false);
     }
 
     #[test]
     fn binary_encoding_true_is_skir_then_1() {
-        assert_eq!(bool_serializer().to_bytes(&true), b"skir\x01");
+        assert_eq!(Serializer::bool().to_bytes(&true), b"skir\x01");
     }
 
     #[test]
     fn binary_encoding_false_is_skir_then_0() {
-        assert_eq!(bool_serializer().to_bytes(&false), b"skir\x00");
+        assert_eq!(Serializer::bool().to_bytes(&false), b"skir\x00");
     }
 
     // ── type_descriptor ───────────────────────────────────────────────────────
 
     #[test]
     fn type_descriptor_is_bool() {
-        let td = bool_serializer().type_descriptor();
+        let td = Serializer::bool().type_descriptor();
         assert_eq!(
             td.as_json(),
             "{\n  \"type\": {\n    \"kind\": \"primitive\",\n    \"value\": \"bool\"\n  },\n  \"records\": []\n}"
@@ -1550,7 +1550,7 @@ mod tests {
 
     #[test]
     fn clone_produces_equivalent_serializer() {
-        let s = bool_serializer();
+        let s = Serializer::bool();
         let s2 = s.clone();
         assert_eq!(s2.to_json(&true, JsonFlavor::Dense), "1");
         assert_eq!(s2.to_json(&false, JsonFlavor::Readable), "false");
@@ -1564,24 +1564,24 @@ mod tests {
 
     #[test]
     fn int32_to_json_zero() {
-        assert_eq!(int32_serializer().to_json(&0_i32, JsonFlavor::Dense), "0");
+        assert_eq!(Serializer::int32().to_json(&0_i32, JsonFlavor::Dense), "0");
     }
 
     #[test]
     fn int32_to_json_positive() {
-        assert_eq!(int32_serializer().to_json(&42_i32, JsonFlavor::Dense), "42");
+        assert_eq!(Serializer::int32().to_json(&42_i32, JsonFlavor::Dense), "42");
     }
 
     #[test]
     fn int32_to_json_negative() {
-        assert_eq!(int32_serializer().to_json(&-1_i32, JsonFlavor::Dense), "-1");
+        assert_eq!(Serializer::int32().to_json(&-1_i32, JsonFlavor::Dense), "-1");
     }
 
     #[test]
     fn int32_to_json_same_in_readable_mode() {
         assert_eq!(
-            int32_serializer().to_json(&12345_i32, JsonFlavor::Readable),
-            int32_serializer().to_json(&12345_i32, JsonFlavor::Dense),
+            Serializer::int32().to_json(&12345_i32, JsonFlavor::Readable),
+            Serializer::int32().to_json(&12345_i32, JsonFlavor::Dense),
         );
     }
 
@@ -1589,7 +1589,7 @@ mod tests {
 
     #[test]
     fn int32_from_json_integer() {
-        let s = int32_serializer();
+        let s = Serializer::int32();
         assert_eq!(s.from_json("42", UnrecognizedValues::Drop).unwrap(), 42_i32);
         assert_eq!(s.from_json("-1", UnrecognizedValues::Drop).unwrap(), -1_i32);
         assert_eq!(s.from_json("0", UnrecognizedValues::Drop).unwrap(), 0_i32);
@@ -1597,23 +1597,23 @@ mod tests {
 
     #[test]
     fn int32_from_json_float_truncates() {
-        assert_eq!(int32_serializer().from_json("3.9", UnrecognizedValues::Drop).unwrap(), 3_i32);
-        assert_eq!(int32_serializer().from_json("-1.5", UnrecognizedValues::Drop).unwrap(), -1_i32);
+        assert_eq!(Serializer::int32().from_json("3.9", UnrecognizedValues::Drop).unwrap(), 3_i32);
+        assert_eq!(Serializer::int32().from_json("-1.5", UnrecognizedValues::Drop).unwrap(), -1_i32);
     }
 
     #[test]
     fn int32_from_json_string() {
-        assert_eq!(int32_serializer().from_json(r#""7""#, UnrecognizedValues::Drop).unwrap(), 7_i32);
+        assert_eq!(Serializer::int32().from_json(r#""7""#, UnrecognizedValues::Drop).unwrap(), 7_i32);
     }
 
     #[test]
     fn int32_from_json_unparseable_string_is_zero() {
-        assert_eq!(int32_serializer().from_json(r#""abc""#, UnrecognizedValues::Drop).unwrap(), 0_i32);
+        assert_eq!(Serializer::int32().from_json(r#""abc""#, UnrecognizedValues::Drop).unwrap(), 0_i32);
     }
 
     #[test]
     fn int32_from_json_null_is_zero() {
-        assert_eq!(int32_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), 0_i32);
+        assert_eq!(Serializer::int32().from_json("null", UnrecognizedValues::Drop).unwrap(), 0_i32);
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
@@ -1621,7 +1621,7 @@ mod tests {
     #[test]
     fn int32_encode_small_positive_is_single_byte() {
         // 0..=231 encoded as the value itself
-        let s = int32_serializer();
+        let s = Serializer::int32();
         assert_eq!(s.to_bytes(&0_i32), b"skir\x00");
         assert_eq!(s.to_bytes(&1_i32), b"skir\x01");
         assert_eq!(s.to_bytes(&231_i32), b"skir\xe7");
@@ -1630,41 +1630,41 @@ mod tests {
     #[test]
     fn int32_encode_u16_range() {
         // 232..65535 → wire 232 + u16 LE
-        let bytes = int32_serializer().to_bytes(&1000_i32);
+        let bytes = Serializer::int32().to_bytes(&1000_i32);
         assert_eq!(&bytes[4..], &[232, 232, 3]); // 1000 = 0x03E8 LE
     }
 
     #[test]
     fn int32_encode_u32_range() {
         // >= 65536 → wire 233 + u32 LE
-        let bytes = int32_serializer().to_bytes(&65536_i32);
+        let bytes = Serializer::int32().to_bytes(&65536_i32);
         assert_eq!(&bytes[4..], &[233, 0, 0, 1, 0]);
     }
 
     #[test]
     fn int32_encode_small_negative() {
         // -256..-1 → wire 235 + u8(v+256)
-        let bytes = int32_serializer().to_bytes(&-1_i32);
+        let bytes = Serializer::int32().to_bytes(&-1_i32);
         assert_eq!(&bytes[4..], &[235, 255]);
     }
 
     #[test]
     fn int32_encode_medium_negative() {
         // -65536..-257 → wire 236 + u16 LE
-        let bytes = int32_serializer().to_bytes(&-300_i32);
+        let bytes = Serializer::int32().to_bytes(&-300_i32);
         assert_eq!(&bytes[4..], &[236, 212, 254]); // -300+65536=65236=0xFED4 LE
     }
 
     #[test]
     fn int32_encode_large_negative() {
         // < -65536 → wire 237 + i32 LE
-        let bytes = int32_serializer().to_bytes(&-100_000_i32);
+        let bytes = Serializer::int32().to_bytes(&-100_000_i32);
         assert_eq!(&bytes[4..], &[237, 96, 121, 254, 255]); // -100000 as i32 LE
     }
 
     #[test]
     fn int32_binary_round_trip() {
-        let s = int32_serializer();
+        let s = Serializer::int32();
         for v in [0, 1, 42, 231, 232, 300, 65535, 65536, i32::MAX, -1, -255, -256, -65536, i32::MIN] {
             let decoded = s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap();
             assert_eq!(decoded, v, "round trip failed for {v}");
@@ -1679,19 +1679,19 @@ mod tests {
 
     #[test]
     fn int64_to_json_safe_integer() {
-        assert_eq!(int64_serializer().to_json(&0_i64, JsonFlavor::Dense), "0");
-        assert_eq!(int64_serializer().to_json(&9_007_199_254_740_991_i64, JsonFlavor::Dense), "9007199254740991");
-        assert_eq!(int64_serializer().to_json(&-9_007_199_254_740_991_i64, JsonFlavor::Dense), "-9007199254740991");
+        assert_eq!(Serializer::int64().to_json(&0_i64, JsonFlavor::Dense), "0");
+        assert_eq!(Serializer::int64().to_json(&9_007_199_254_740_991_i64, JsonFlavor::Dense), "9007199254740991");
+        assert_eq!(Serializer::int64().to_json(&-9_007_199_254_740_991_i64, JsonFlavor::Dense), "-9007199254740991");
     }
 
     #[test]
     fn int64_to_json_large_value_is_quoted() {
         assert_eq!(
-            int64_serializer().to_json(&9_007_199_254_740_992_i64, JsonFlavor::Dense),
+            Serializer::int64().to_json(&9_007_199_254_740_992_i64, JsonFlavor::Dense),
             r#""9007199254740992""#,
         );
         assert_eq!(
-            int64_serializer().to_json(&i64::MAX, JsonFlavor::Dense),
+            Serializer::int64().to_json(&i64::MAX, JsonFlavor::Dense),
             format!("\"{}\"", i64::MAX),
         );
     }
@@ -1700,21 +1700,21 @@ mod tests {
 
     #[test]
     fn int64_from_json_integer() {
-        assert_eq!(int64_serializer().from_json("42", UnrecognizedValues::Drop).unwrap(), 42_i64);
-        assert_eq!(int64_serializer().from_json("-1", UnrecognizedValues::Drop).unwrap(), -1_i64);
+        assert_eq!(Serializer::int64().from_json("42", UnrecognizedValues::Drop).unwrap(), 42_i64);
+        assert_eq!(Serializer::int64().from_json("-1", UnrecognizedValues::Drop).unwrap(), -1_i64);
     }
 
     #[test]
     fn int64_from_json_quoted_large() {
         assert_eq!(
-            int64_serializer().from_json(r#""9007199254740992""#, UnrecognizedValues::Drop).unwrap(),
+            Serializer::int64().from_json(r#""9007199254740992""#, UnrecognizedValues::Drop).unwrap(),
             9_007_199_254_740_992_i64,
         );
     }
 
     #[test]
     fn int64_from_json_null_is_zero() {
-        assert_eq!(int64_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), 0_i64);
+        assert_eq!(Serializer::int64().from_json("null", UnrecognizedValues::Drop).unwrap(), 0_i64);
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
@@ -1722,22 +1722,22 @@ mod tests {
     #[test]
     fn int64_encode_fits_i32_reuses_i32_encoding() {
         // Values in i32 range reuse int32 wire format.
-        assert_eq!(int64_serializer().to_bytes(&0_i64), b"skir\x00");
-        assert_eq!(int64_serializer().to_bytes(&42_i64), b"skir\x2a");
+        assert_eq!(Serializer::int64().to_bytes(&0_i64), b"skir\x00");
+        assert_eq!(Serializer::int64().to_bytes(&42_i64), b"skir\x2a");
     }
 
     #[test]
     fn int64_encode_wire_238() {
         // Values outside i32 range → wire 238 + i64 LE
         let v: i64 = i32::MAX as i64 + 1;
-        let bytes = int64_serializer().to_bytes(&v);
+        let bytes = Serializer::int64().to_bytes(&v);
         assert_eq!(bytes[4], 238);
         assert_eq!(&bytes[5..], &v.to_le_bytes());
     }
 
     #[test]
     fn int64_binary_round_trip() {
-        let s = int64_serializer();
+        let s = Serializer::int64();
         for v in [0, 1, 231, 232, 65536, i32::MAX as i64, i32::MAX as i64 + 1, i64::MAX, -1, i32::MIN as i64, i64::MIN] {
             let decoded = s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap();
             assert_eq!(decoded, v, "round trip failed for {v}");
@@ -1752,18 +1752,18 @@ mod tests {
 
     #[test]
     fn uint64_to_json_safe_integer() {
-        assert_eq!(hash64_serializer().to_json(&0_u64, JsonFlavor::Dense), "0");
-        assert_eq!(hash64_serializer().to_json(&9_007_199_254_740_991_u64, JsonFlavor::Dense), "9007199254740991");
+        assert_eq!(Serializer::hash64().to_json(&0_u64, JsonFlavor::Dense), "0");
+        assert_eq!(Serializer::hash64().to_json(&9_007_199_254_740_991_u64, JsonFlavor::Dense), "9007199254740991");
     }
 
     #[test]
     fn uint64_to_json_large_value_is_quoted() {
         assert_eq!(
-            hash64_serializer().to_json(&9_007_199_254_740_992_u64, JsonFlavor::Dense),
+            Serializer::hash64().to_json(&9_007_199_254_740_992_u64, JsonFlavor::Dense),
             r#""9007199254740992""#,
         );
         assert_eq!(
-            hash64_serializer().to_json(&u64::MAX, JsonFlavor::Dense),
+            Serializer::hash64().to_json(&u64::MAX, JsonFlavor::Dense),
             format!("\"{}\"", u64::MAX),
         );
     }
@@ -1772,47 +1772,47 @@ mod tests {
 
     #[test]
     fn uint64_from_json_integer() {
-        assert_eq!(hash64_serializer().from_json("42", UnrecognizedValues::Drop).unwrap(), 42_u64);
+        assert_eq!(Serializer::hash64().from_json("42", UnrecognizedValues::Drop).unwrap(), 42_u64);
     }
 
     #[test]
     fn uint64_from_json_negative_number_is_zero() {
         // negative float → clamped to 0
-        assert_eq!(hash64_serializer().from_json("-1.0", UnrecognizedValues::Drop).unwrap(), 0_u64);
+        assert_eq!(Serializer::hash64().from_json("-1.0", UnrecognizedValues::Drop).unwrap(), 0_u64);
     }
 
     #[test]
     fn uint64_from_json_quoted_large() {
         assert_eq!(
-            hash64_serializer().from_json(r#""9007199254740992""#, UnrecognizedValues::Drop).unwrap(),
+            Serializer::hash64().from_json(r#""9007199254740992""#, UnrecognizedValues::Drop).unwrap(),
             9_007_199_254_740_992_u64,
         );
     }
 
     #[test]
     fn uint64_from_json_null_is_zero() {
-        assert_eq!(hash64_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), 0_u64);
+        assert_eq!(Serializer::hash64().from_json("null", UnrecognizedValues::Drop).unwrap(), 0_u64);
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
 
     #[test]
     fn uint64_encode_single_byte_range() {
-        assert_eq!(hash64_serializer().to_bytes(&0_u64), b"skir\x00");
-        assert_eq!(hash64_serializer().to_bytes(&231_u64), b"skir\xe7");
+        assert_eq!(Serializer::hash64().to_bytes(&0_u64), b"skir\x00");
+        assert_eq!(Serializer::hash64().to_bytes(&231_u64), b"skir\xe7");
     }
 
     #[test]
     fn uint64_encode_u16_range() {
         // 232..65535 → wire 232 + u16 LE
-        let bytes = hash64_serializer().to_bytes(&1000_u64);
+        let bytes = Serializer::hash64().to_bytes(&1000_u64);
         assert_eq!(&bytes[4..], &[232, 232, 3]);
     }
 
     #[test]
     fn uint64_encode_u32_range() {
         // 65536..4294967295 → wire 233 + u32 LE
-        let bytes = hash64_serializer().to_bytes(&65536_u64);
+        let bytes = Serializer::hash64().to_bytes(&65536_u64);
         assert_eq!(&bytes[4..], &[233, 0, 0, 1, 0]);
     }
 
@@ -1820,14 +1820,14 @@ mod tests {
     fn uint64_encode_u64_range() {
         // >= 2^32 → wire 234 + u64 LE
         let v: u64 = 4_294_967_296;
-        let bytes = hash64_serializer().to_bytes(&v);
+        let bytes = Serializer::hash64().to_bytes(&v);
         assert_eq!(bytes[4], 234);
         assert_eq!(&bytes[5..], &v.to_le_bytes());
     }
 
     #[test]
     fn uint64_binary_round_trip() {
-        let s = hash64_serializer();
+        let s = Serializer::hash64();
         for v in [0_u64, 1, 231, 232, 65535, 65536, 4_294_967_295, 4_294_967_296, u64::MAX] {
             let decoded = s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap();
             assert_eq!(decoded, v, "round trip failed for {v}");
@@ -1842,31 +1842,31 @@ mod tests {
 
     #[test]
     fn float32_to_json_zero() {
-        assert_eq!(float32_serializer().to_json(&0.0_f32, JsonFlavor::Dense), "0");
+        assert_eq!(Serializer::float32().to_json(&0.0_f32, JsonFlavor::Dense), "0");
     }
 
     #[test]
     fn float32_to_json_finite() {
-        assert_eq!(float32_serializer().to_json(&1.5_f32, JsonFlavor::Dense), "1.5");
-        assert_eq!(float32_serializer().to_json(&-3.14_f32, JsonFlavor::Dense), "-3.14");
+        assert_eq!(Serializer::float32().to_json(&1.5_f32, JsonFlavor::Dense), "1.5");
+        assert_eq!(Serializer::float32().to_json(&-3.14_f32, JsonFlavor::Dense), "-3.14");
     }
 
     #[test]
     fn float32_to_json_nan_is_quoted() {
-        assert_eq!(float32_serializer().to_json(&f32::NAN, JsonFlavor::Dense), r#""NaN""#);
+        assert_eq!(Serializer::float32().to_json(&f32::NAN, JsonFlavor::Dense), r#""NaN""#);
     }
 
     #[test]
     fn float32_to_json_infinity_is_quoted() {
-        assert_eq!(float32_serializer().to_json(&f32::INFINITY, JsonFlavor::Dense), r#""Infinity""#);
-        assert_eq!(float32_serializer().to_json(&f32::NEG_INFINITY, JsonFlavor::Dense), r#""-Infinity""#);
+        assert_eq!(Serializer::float32().to_json(&f32::INFINITY, JsonFlavor::Dense), r#""Infinity""#);
+        assert_eq!(Serializer::float32().to_json(&f32::NEG_INFINITY, JsonFlavor::Dense), r#""-Infinity""#);
     }
 
     #[test]
     fn float32_to_json_same_in_readable_mode() {
         assert_eq!(
-            float32_serializer().to_json(&1.5_f32, JsonFlavor::Readable),
-            float32_serializer().to_json(&1.5_f32, JsonFlavor::Dense),
+            Serializer::float32().to_json(&1.5_f32, JsonFlavor::Readable),
+            Serializer::float32().to_json(&1.5_f32, JsonFlavor::Dense),
         );
     }
 
@@ -1874,49 +1874,49 @@ mod tests {
 
     #[test]
     fn float32_from_json_number() {
-        let v = float32_serializer().from_json("1.5", UnrecognizedValues::Drop).unwrap();
+        let v = Serializer::float32().from_json("1.5", UnrecognizedValues::Drop).unwrap();
         assert!((v - 1.5_f32).abs() < f32::EPSILON);
     }
 
     #[test]
     fn float32_from_json_string_nan() {
-        assert!(float32_serializer().from_json(r#""NaN""#, UnrecognizedValues::Drop).unwrap().is_nan());
+        assert!(Serializer::float32().from_json(r#""NaN""#, UnrecognizedValues::Drop).unwrap().is_nan());
     }
 
     #[test]
     fn float32_from_json_string_infinity() {
-        assert_eq!(float32_serializer().from_json(r#""Infinity""#, UnrecognizedValues::Drop).unwrap(), f32::INFINITY);
-        assert_eq!(float32_serializer().from_json(r#""-Infinity""#, UnrecognizedValues::Drop).unwrap(), f32::NEG_INFINITY);
+        assert_eq!(Serializer::float32().from_json(r#""Infinity""#, UnrecognizedValues::Drop).unwrap(), f32::INFINITY);
+        assert_eq!(Serializer::float32().from_json(r#""-Infinity""#, UnrecognizedValues::Drop).unwrap(), f32::NEG_INFINITY);
     }
 
     #[test]
     fn float32_from_json_unparseable_string_is_zero() {
-        assert_eq!(float32_serializer().from_json(r#""abc""#, UnrecognizedValues::Drop).unwrap(), 0.0_f32);
+        assert_eq!(Serializer::float32().from_json(r#""abc""#, UnrecognizedValues::Drop).unwrap(), 0.0_f32);
     }
 
     #[test]
     fn float32_from_json_null_is_zero() {
-        assert_eq!(float32_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), 0.0_f32);
+        assert_eq!(Serializer::float32().from_json("null", UnrecognizedValues::Drop).unwrap(), 0.0_f32);
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
 
     #[test]
     fn float32_encode_zero_is_single_byte() {
-        assert_eq!(float32_serializer().to_bytes(&0.0_f32), b"skir\x00");
+        assert_eq!(Serializer::float32().to_bytes(&0.0_f32), b"skir\x00");
     }
 
     #[test]
     fn float32_encode_nonzero_is_wire_240_plus_le_bits() {
         let v = 1.5_f32;
-        let bytes = float32_serializer().to_bytes(&v);
+        let bytes = Serializer::float32().to_bytes(&v);
         assert_eq!(bytes[4], 240);
         assert_eq!(&bytes[5..], &v.to_bits().to_le_bytes());
     }
 
     #[test]
     fn float32_binary_round_trip() {
-        let s = float32_serializer();
+        let s = Serializer::float32();
         for v in [0.0_f32, 1.0, -1.0, 1.5, f32::MAX, f32::MIN_POSITIVE, f32::INFINITY, f32::NEG_INFINITY] {
             let decoded = s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap();
             assert_eq!(decoded, v, "round trip failed for {v}");
@@ -1925,7 +1925,7 @@ mod tests {
 
     #[test]
     fn float32_nan_round_trip() {
-        let s = float32_serializer();
+        let s = Serializer::float32();
         let decoded = s.from_bytes(&s.to_bytes(&f32::NAN), UnrecognizedValues::Drop).unwrap();
         assert!(decoded.is_nan());
     }
@@ -1938,68 +1938,68 @@ mod tests {
 
     #[test]
     fn float64_to_json_zero() {
-        assert_eq!(float64_serializer().to_json(&0.0_f64, JsonFlavor::Dense), "0");
+        assert_eq!(Serializer::float64().to_json(&0.0_f64, JsonFlavor::Dense), "0");
     }
 
     #[test]
     fn float64_to_json_finite() {
-        assert_eq!(float64_serializer().to_json(&1.5_f64, JsonFlavor::Dense), "1.5");
-        assert_eq!(float64_serializer().to_json(&-3.14_f64, JsonFlavor::Dense), "-3.14");
+        assert_eq!(Serializer::float64().to_json(&1.5_f64, JsonFlavor::Dense), "1.5");
+        assert_eq!(Serializer::float64().to_json(&-3.14_f64, JsonFlavor::Dense), "-3.14");
     }
 
     #[test]
     fn float64_to_json_nan_is_quoted() {
-        assert_eq!(float64_serializer().to_json(&f64::NAN, JsonFlavor::Dense), r#""NaN""#);
+        assert_eq!(Serializer::float64().to_json(&f64::NAN, JsonFlavor::Dense), r#""NaN""#);
     }
 
     #[test]
     fn float64_to_json_infinity_is_quoted() {
-        assert_eq!(float64_serializer().to_json(&f64::INFINITY, JsonFlavor::Dense), r#""Infinity""#);
-        assert_eq!(float64_serializer().to_json(&f64::NEG_INFINITY, JsonFlavor::Dense), r#""-Infinity""#);
+        assert_eq!(Serializer::float64().to_json(&f64::INFINITY, JsonFlavor::Dense), r#""Infinity""#);
+        assert_eq!(Serializer::float64().to_json(&f64::NEG_INFINITY, JsonFlavor::Dense), r#""-Infinity""#);
     }
 
     // ── from_json ─────────────────────────────────────────────────────────────
 
     #[test]
     fn float64_from_json_number() {
-        let v = float64_serializer().from_json("1.5", UnrecognizedValues::Drop).unwrap();
+        let v = Serializer::float64().from_json("1.5", UnrecognizedValues::Drop).unwrap();
         assert!((v - 1.5_f64).abs() < f64::EPSILON);
     }
 
     #[test]
     fn float64_from_json_string_nan() {
-        assert!(float64_serializer().from_json(r#""NaN""#, UnrecognizedValues::Drop).unwrap().is_nan());
+        assert!(Serializer::float64().from_json(r#""NaN""#, UnrecognizedValues::Drop).unwrap().is_nan());
     }
 
     #[test]
     fn float64_from_json_string_infinity() {
-        assert_eq!(float64_serializer().from_json(r#""Infinity""#, UnrecognizedValues::Drop).unwrap(), f64::INFINITY);
-        assert_eq!(float64_serializer().from_json(r#""-Infinity""#, UnrecognizedValues::Drop).unwrap(), f64::NEG_INFINITY);
+        assert_eq!(Serializer::float64().from_json(r#""Infinity""#, UnrecognizedValues::Drop).unwrap(), f64::INFINITY);
+        assert_eq!(Serializer::float64().from_json(r#""-Infinity""#, UnrecognizedValues::Drop).unwrap(), f64::NEG_INFINITY);
     }
 
     #[test]
     fn float64_from_json_null_is_zero() {
-        assert_eq!(float64_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), 0.0_f64);
+        assert_eq!(Serializer::float64().from_json("null", UnrecognizedValues::Drop).unwrap(), 0.0_f64);
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
 
     #[test]
     fn float64_encode_zero_is_single_byte() {
-        assert_eq!(float64_serializer().to_bytes(&0.0_f64), b"skir\x00");
+        assert_eq!(Serializer::float64().to_bytes(&0.0_f64), b"skir\x00");
     }
 
     #[test]
     fn float64_encode_nonzero_is_wire_241_plus_le_bits() {
         let v = 1.5_f64;
-        let bytes = float64_serializer().to_bytes(&v);
+        let bytes = Serializer::float64().to_bytes(&v);
         assert_eq!(bytes[4], 241);
         assert_eq!(&bytes[5..], &v.to_bits().to_le_bytes());
     }
 
     #[test]
     fn float64_binary_round_trip() {
-        let s = float64_serializer();
+        let s = Serializer::float64();
         for v in [0.0_f64, 1.0, -1.0, 1.5, f64::MAX, f64::MIN_POSITIVE, f64::INFINITY, f64::NEG_INFINITY] {
             let decoded = s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap();
             assert_eq!(decoded, v, "round trip failed for {v}");
@@ -2008,7 +2008,7 @@ mod tests {
 
     #[test]
     fn float64_nan_round_trip() {
-        let s = float64_serializer();
+        let s = Serializer::float64();
         let decoded = s.from_bytes(&s.to_bytes(&f64::NAN), UnrecognizedValues::Drop).unwrap();
         assert!(decoded.is_nan());
     }
@@ -2045,14 +2045,14 @@ mod tests {
 
     #[test]
     fn timestamp_to_json_dense_epoch() {
-        assert_eq!(timestamp_serializer().to_json(&SystemTime::UNIX_EPOCH, JsonFlavor::Dense), "0");
+        assert_eq!(Serializer::timestamp().to_json(&SystemTime::UNIX_EPOCH, JsonFlavor::Dense), "0");
     }
 
     #[test]
     fn timestamp_to_json_dense_nonzero() {
         let ts = millis_to_system_time(1_234_567_890_000);
         assert_eq!(
-            timestamp_serializer().to_json(&ts, JsonFlavor::Dense),
+            Serializer::timestamp().to_json(&ts, JsonFlavor::Dense),
             "1234567890000",
         );
     }
@@ -2062,7 +2062,7 @@ mod tests {
         let ts = millis_to_system_time(1_234_567_890_000);
         let expected =
             "{\n  \"unix_millis\": 1234567890000,\n  \"formatted\": \"2009-02-13T23:31:30.000Z\"\n}";
-        assert_eq!(timestamp_serializer().to_json(&ts, JsonFlavor::Readable), expected);
+        assert_eq!(Serializer::timestamp().to_json(&ts, JsonFlavor::Readable), expected);
     }
 
     // ── from_json ─────────────────────────────────────────────────────────────
@@ -2070,7 +2070,7 @@ mod tests {
     #[test]
     fn timestamp_from_json_number() {
         assert_eq!(
-            timestamp_serializer().from_json("1234567890000", UnrecognizedValues::Drop).unwrap(),
+            Serializer::timestamp().from_json("1234567890000", UnrecognizedValues::Drop).unwrap(),
             millis_to_system_time(1_234_567_890_000),
         );
     }
@@ -2078,7 +2078,7 @@ mod tests {
     #[test]
     fn timestamp_from_json_string() {
         assert_eq!(
-            timestamp_serializer().from_json(r#""1234567890000""#, UnrecognizedValues::Drop).unwrap(),
+            Serializer::timestamp().from_json(r#""1234567890000""#, UnrecognizedValues::Drop).unwrap(),
             millis_to_system_time(1_234_567_890_000),
         );
     }
@@ -2088,7 +2088,7 @@ mod tests {
         let json =
             r#"{"unix_millis": 1234567890000, "formatted": "2009-02-13T23:31:30.000Z"}"#;
         assert_eq!(
-            timestamp_serializer().from_json(json, UnrecognizedValues::Drop).unwrap(),
+            Serializer::timestamp().from_json(json, UnrecognizedValues::Drop).unwrap(),
             millis_to_system_time(1_234_567_890_000),
         );
     }
@@ -2096,7 +2096,7 @@ mod tests {
     #[test]
     fn timestamp_from_json_null_is_epoch() {
         assert_eq!(
-            timestamp_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(),
+            Serializer::timestamp().from_json("null", UnrecognizedValues::Drop).unwrap(),
             SystemTime::UNIX_EPOCH,
         );
     }
@@ -2105,20 +2105,20 @@ mod tests {
 
     #[test]
     fn timestamp_encode_epoch_is_single_byte_zero() {
-        assert_eq!(timestamp_serializer().to_bytes(&SystemTime::UNIX_EPOCH), b"skir\x00");
+        assert_eq!(Serializer::timestamp().to_bytes(&SystemTime::UNIX_EPOCH), b"skir\x00");
     }
 
     #[test]
     fn timestamp_encode_nonzero_is_wire_239() {
         let ts = millis_to_system_time(1_234_567_890_000);
-        let bytes = timestamp_serializer().to_bytes(&ts);
+        let bytes = Serializer::timestamp().to_bytes(&ts);
         assert_eq!(bytes[4], 239);
         assert_eq!(&bytes[5..], &1_234_567_890_000_i64.to_le_bytes());
     }
 
     #[test]
     fn timestamp_binary_round_trip() {
-        let s = timestamp_serializer();
+        let s = Serializer::timestamp();
         for ms in [0_i64, 1, 1_234_567_890_000, -1000] {
             let ts = millis_to_system_time(ms);
             assert_eq!(s.from_bytes(&s.to_bytes(&ts), UnrecognizedValues::Drop).unwrap(), ts);
@@ -2133,24 +2133,24 @@ mod tests {
 
     #[test]
     fn string_to_json_plain() {
-        assert_eq!(string_serializer().to_json(&"hello".to_string(), JsonFlavor::Dense), r#""hello""#);
+        assert_eq!(Serializer::string().to_json(&"hello".to_string(), JsonFlavor::Dense), r#""hello""#);
     }
 
     #[test]
     fn string_to_json_empty() {
-        assert_eq!(string_serializer().to_json(&String::new(), JsonFlavor::Dense), r#""""#);
+        assert_eq!(Serializer::string().to_json(&String::new(), JsonFlavor::Dense), r#""""#);
     }
 
     #[test]
     fn string_to_json_escapes_quote_and_backslash() {
         // Input: say "hi"  →  JSON: "say \"hi\""
         assert_eq!(
-            string_serializer().to_json(&"say \"hi\"".to_string(), JsonFlavor::Dense),
+            Serializer::string().to_json(&"say \"hi\"".to_string(), JsonFlavor::Dense),
             "\"say \\\"hi\\\"\""
         );
         // Input: a\b  →  JSON: "a\\b"
         assert_eq!(
-            string_serializer().to_json(&"a\\b".to_string(), JsonFlavor::Dense),
+            Serializer::string().to_json(&"a\\b".to_string(), JsonFlavor::Dense),
             "\"a\\\\b\""
         );
     }
@@ -2159,7 +2159,7 @@ mod tests {
     fn string_to_json_escapes_control_chars() {
         // \n, \t, \r should appear as two-char sequences in JSON output.
         assert_eq!(
-            string_serializer().to_json(&"\n\t\r".to_string(), JsonFlavor::Dense),
+            Serializer::string().to_json(&"\n\t\r".to_string(), JsonFlavor::Dense),
             "\"\\n\\t\\r\""
         );
     }
@@ -2167,8 +2167,8 @@ mod tests {
     #[test]
     fn string_to_json_same_in_readable_mode() {
         assert_eq!(
-            string_serializer().to_json(&"hello".to_string(), JsonFlavor::Readable),
-            string_serializer().to_json(&"hello".to_string(), JsonFlavor::Dense),
+            Serializer::string().to_json(&"hello".to_string(), JsonFlavor::Readable),
+            Serializer::string().to_json(&"hello".to_string(), JsonFlavor::Dense),
         );
     }
 
@@ -2177,38 +2177,38 @@ mod tests {
     #[test]
     fn string_from_json_string() {
         assert_eq!(
-            string_serializer().from_json(r#""hello""#, UnrecognizedValues::Drop).unwrap(),
+            Serializer::string().from_json(r#""hello""#, UnrecognizedValues::Drop).unwrap(),
             "hello".to_string(),
         );
     }
 
     #[test]
     fn string_from_json_number_is_empty() {
-        assert_eq!(string_serializer().from_json("0", UnrecognizedValues::Drop).unwrap(), "");
+        assert_eq!(Serializer::string().from_json("0", UnrecognizedValues::Drop).unwrap(), "");
     }
 
     #[test]
     fn string_from_json_null_is_empty() {
-        assert_eq!(string_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), "");
+        assert_eq!(Serializer::string().from_json("null", UnrecognizedValues::Drop).unwrap(), "");
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
 
     #[test]
     fn string_encode_empty_is_wire_242() {
-        assert_eq!(string_serializer().to_bytes(&String::new()), b"skir\xf2");
+        assert_eq!(Serializer::string().to_bytes(&String::new()), b"skir\xf2");
     }
 
     #[test]
     fn string_encode_nonempty() {
         // wire 243 + length (1 byte for len < 232) + utf-8 bytes
-        let bytes = string_serializer().to_bytes(&"hi".to_string());
+        let bytes = Serializer::string().to_bytes(&"hi".to_string());
         assert_eq!(&bytes[4..], &[0xf3, 0x02, b'h', b'i']);
     }
 
     #[test]
     fn string_binary_round_trip() {
-        let s = string_serializer();
+        let s = Serializer::string();
         for v in ["", "hello", "emoji: \u{1F600}", "quotes: \"x\""] {
             let v = v.to_string();
             assert_eq!(s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap(), v);
@@ -2262,7 +2262,7 @@ mod tests {
     #[test]
     fn bytes_to_json_dense_base64() {
         assert_eq!(
-            bytes_serializer().to_json(&b"hello".to_vec(), JsonFlavor::Dense),
+            Serializer::bytes().to_json(&b"hello".to_vec(), JsonFlavor::Dense),
             r#""aGVsbG8=""#,
         );
     }
@@ -2270,14 +2270,14 @@ mod tests {
     #[test]
     fn bytes_to_json_readable_hex() {
         assert_eq!(
-            bytes_serializer().to_json(&b"hello".to_vec(), JsonFlavor::Readable),
+            Serializer::bytes().to_json(&b"hello".to_vec(), JsonFlavor::Readable),
             r#""hex:68656c6c6f""#,
         );
     }
 
     #[test]
     fn bytes_to_json_empty_dense() {
-        assert_eq!(bytes_serializer().to_json(&vec![], JsonFlavor::Dense), r#""""#);
+        assert_eq!(Serializer::bytes().to_json(&vec![], JsonFlavor::Dense), r#""""#);
     }
 
     // ── from_json ─────────────────────────────────────────────────────────────
@@ -2285,7 +2285,7 @@ mod tests {
     #[test]
     fn bytes_from_json_base64() {
         assert_eq!(
-            bytes_serializer().from_json(r#""aGVsbG8=""#, UnrecognizedValues::Drop).unwrap(),
+            Serializer::bytes().from_json(r#""aGVsbG8=""#, UnrecognizedValues::Drop).unwrap(),
             b"hello".to_vec(),
         );
     }
@@ -2293,38 +2293,38 @@ mod tests {
     #[test]
     fn bytes_from_json_hex() {
         assert_eq!(
-            bytes_serializer().from_json(r#""hex:68656c6c6f""#, UnrecognizedValues::Drop).unwrap(),
+            Serializer::bytes().from_json(r#""hex:68656c6c6f""#, UnrecognizedValues::Drop).unwrap(),
             b"hello".to_vec(),
         );
     }
 
     #[test]
     fn bytes_from_json_number_is_empty() {
-        assert_eq!(bytes_serializer().from_json("0", UnrecognizedValues::Drop).unwrap(), Vec::<u8>::new());
+        assert_eq!(Serializer::bytes().from_json("0", UnrecognizedValues::Drop).unwrap(), Vec::<u8>::new());
     }
 
     #[test]
     fn bytes_from_json_null_is_empty() {
-        assert_eq!(bytes_serializer().from_json("null", UnrecognizedValues::Drop).unwrap(), Vec::<u8>::new());
+        assert_eq!(Serializer::bytes().from_json("null", UnrecognizedValues::Drop).unwrap(), Vec::<u8>::new());
     }
 
     // ── binary encoding ───────────────────────────────────────────────────────
 
     #[test]
     fn bytes_encode_empty_is_wire_244() {
-        assert_eq!(bytes_serializer().to_bytes(&vec![]), b"skir\xf4");
+        assert_eq!(Serializer::bytes().to_bytes(&vec![]), b"skir\xf4");
     }
 
     #[test]
     fn bytes_encode_nonempty() {
         // wire 245 + length (1 byte for len < 232) + raw bytes
-        let bytes = bytes_serializer().to_bytes(&vec![1_u8, 2, 3]);
+        let bytes = Serializer::bytes().to_bytes(&vec![1_u8, 2, 3]);
         assert_eq!(&bytes[4..], &[0xf5, 0x03, 1, 2, 3]);
     }
 
     #[test]
     fn bytes_binary_round_trip() {
-        let s = bytes_serializer();
+        let s = Serializer::bytes();
         for data in [vec![], vec![0_u8], b"hello".to_vec(), vec![0xFF_u8; 300]] {
             assert_eq!(s.from_bytes(&s.to_bytes(&data), UnrecognizedValues::Drop).unwrap(), data);
         }
@@ -2334,26 +2334,26 @@ mod tests {
 
     #[test]
     fn array_to_json_dense_empty() {
-        assert_eq!(array_serializer(int32_serializer()).to_json(&vec![], JsonFlavor::Dense), "[]");
+        assert_eq!(Serializer::array(Serializer::int32()).to_json(&vec![], JsonFlavor::Dense), "[]");
     }
 
     #[test]
     fn array_to_json_dense_nonempty() {
         assert_eq!(
-            array_serializer(int32_serializer()).to_json(&vec![1_i32, 2, 3], JsonFlavor::Dense),
+            Serializer::array(Serializer::int32()).to_json(&vec![1_i32, 2, 3], JsonFlavor::Dense),
             "[1,2,3]",
         );
     }
 
     #[test]
     fn array_to_json_readable_empty() {
-        assert_eq!(array_serializer(int32_serializer()).to_json(&vec![], JsonFlavor::Readable), "[]");
+        assert_eq!(Serializer::array(Serializer::int32()).to_json(&vec![], JsonFlavor::Readable), "[]");
     }
 
     #[test]
     fn array_to_json_readable_nonempty() {
         assert_eq!(
-            array_serializer(int32_serializer()).to_json(&vec![1_i32, 2], JsonFlavor::Readable),
+            Serializer::array(Serializer::int32()).to_json(&vec![1_i32, 2], JsonFlavor::Readable),
             "[\n  1,\n  2\n]",
         );
     }
@@ -2361,7 +2361,7 @@ mod tests {
     #[test]
     fn array_from_json_array() {
         assert_eq!(
-            array_serializer(int32_serializer()).from_json("[10,20,30]", UnrecognizedValues::Drop).unwrap(),
+            Serializer::array(Serializer::int32()).from_json("[10,20,30]", UnrecognizedValues::Drop).unwrap(),
             vec![10_i32, 20, 30],
         );
     }
@@ -2369,7 +2369,7 @@ mod tests {
     #[test]
     fn array_from_json_null_is_empty() {
         assert_eq!(
-            array_serializer(int32_serializer()).from_json("null", UnrecognizedValues::Drop).unwrap(),
+            Serializer::array(Serializer::int32()).from_json("null", UnrecognizedValues::Drop).unwrap(),
             Vec::<i32>::new(),
         );
     }
@@ -2377,7 +2377,7 @@ mod tests {
     #[test]
     fn array_encode_empty_is_wire_246() {
         assert_eq!(
-            array_serializer(int32_serializer()).to_bytes(&vec![]),
+            Serializer::array(Serializer::int32()).to_bytes(&vec![]),
             b"skir\xf6",
         );
     }
@@ -2385,19 +2385,19 @@ mod tests {
     #[test]
     fn array_encode_nonempty() {
         // wire 249 (246 + 3 items, no length byte) + items [1, 2, 3]
-        let bytes = array_serializer(int32_serializer()).to_bytes(&vec![1_i32, 2, 3]);
+        let bytes = Serializer::array(Serializer::int32()).to_bytes(&vec![1_i32, 2, 3]);
         assert_eq!(&bytes[4..], &[0xf9_u8, 1, 2, 3]);
     }
 
     #[test]
     fn array_binary_round_trip() {
-        let s = array_serializer(int32_serializer());
+        let s = Serializer::array(Serializer::int32());
         for v in [vec![], vec![0_i32], vec![1, 2, 3], vec![-1, 0, 1]] {
             assert_eq!(s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap(), v);
         }
     }
 
-    // ── keyed_array_serializer ────────────────────────────────────────────────
+    // ── Serializer::keyed_array ────────────────────────────────────────────────
 
     struct I32Spec;
 
@@ -2423,44 +2423,44 @@ mod tests {
 
     #[test]
     fn keyed_array_to_json_dense_empty() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         assert_eq!(s.to_json(&i32_keyed_vec(vec![]), JsonFlavor::Dense), "[]");
     }
 
     #[test]
     fn keyed_array_to_json_dense_nonempty() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         assert_eq!(s.to_json(&i32_keyed_vec(vec![10, 20]), JsonFlavor::Dense), "[10,20]");
     }
 
     #[test]
     fn keyed_array_to_json_readable_nonempty() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         assert_eq!(s.to_json(&i32_keyed_vec(vec![1, 2]), JsonFlavor::Readable), "[\n  1,\n  2\n]");
     }
 
     #[test]
     fn keyed_array_from_json_array() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         let result = s.from_json("[10,20,30]", UnrecognizedValues::Drop).unwrap();
         assert_eq!(&result[..], &[10_i32, 20, 30]);
     }
 
     #[test]
     fn keyed_array_from_json_null_is_empty() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         assert!(s.from_json("null", UnrecognizedValues::Drop).unwrap().is_empty());
     }
 
     #[test]
     fn keyed_array_encode_empty_is_wire_246() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         assert_eq!(s.to_bytes(&i32_keyed_vec(vec![])), b"skir\xf6");
     }
 
     #[test]
     fn keyed_array_encode_nonempty() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         let bytes = s.to_bytes(&i32_keyed_vec(vec![5, 6]));
         // wire 248 (246 + 2 items, no length byte) + items [5, 6]
         assert_eq!(&bytes[4..], &[0xf8_u8, 5, 6]);
@@ -2468,7 +2468,7 @@ mod tests {
 
     #[test]
     fn keyed_array_binary_round_trip() {
-        let s = keyed_array_serializer::<I32Spec>(int32_serializer());
+        let s = Serializer::<KeyedVec<I32Spec>>::keyed_array(Serializer::int32());
         for v in [vec![], vec![0_i32], vec![1, 2, 3]] {
             let kv = i32_keyed_vec(v.clone());
             let decoded = s.from_bytes(&s.to_bytes(&kv), UnrecognizedValues::Drop).unwrap();
@@ -2480,26 +2480,26 @@ mod tests {
 
     #[test]
     fn optional_to_json_none_is_null() {
-        assert_eq!(optional_serializer(int32_serializer()).to_json(&None, JsonFlavor::Dense), "null");
+        assert_eq!(Serializer::optional(Serializer::int32()).to_json(&None, JsonFlavor::Dense), "null");
     }
 
     #[test]
     fn optional_to_json_some_delegates() {
         assert_eq!(
-            optional_serializer(int32_serializer()).to_json(&Some(42_i32), JsonFlavor::Dense),
+            Serializer::optional(Serializer::int32()).to_json(&Some(42_i32), JsonFlavor::Dense),
             "42",
         );
     }
 
     #[test]
     fn optional_to_json_readable_none_is_null() {
-        assert_eq!(optional_serializer(int32_serializer()).to_json(&None, JsonFlavor::Readable), "null");
+        assert_eq!(Serializer::optional(Serializer::int32()).to_json(&None, JsonFlavor::Readable), "null");
     }
 
     #[test]
     fn optional_to_json_readable_some_delegates() {
         assert_eq!(
-            optional_serializer(int32_serializer()).to_json(&Some(42_i32), JsonFlavor::Readable),
+            Serializer::optional(Serializer::int32()).to_json(&Some(42_i32), JsonFlavor::Readable),
             "42",
         );
     }
@@ -2507,7 +2507,7 @@ mod tests {
     #[test]
     fn optional_from_json_null_is_none() {
         assert_eq!(
-            optional_serializer(int32_serializer()).from_json("null", UnrecognizedValues::Drop).unwrap(),
+            Serializer::optional(Serializer::int32()).from_json("null", UnrecognizedValues::Drop).unwrap(),
             None::<i32>,
         );
     }
@@ -2515,7 +2515,7 @@ mod tests {
     #[test]
     fn optional_from_json_value_is_some() {
         assert_eq!(
-            optional_serializer(int32_serializer()).from_json("7", UnrecognizedValues::Drop).unwrap(),
+            Serializer::optional(Serializer::int32()).from_json("7", UnrecognizedValues::Drop).unwrap(),
             Some(7_i32),
         );
     }
@@ -2523,7 +2523,7 @@ mod tests {
     #[test]
     fn optional_encode_none_is_wire_255() {
         assert_eq!(
-            optional_serializer(int32_serializer()).to_bytes(&None),
+            Serializer::optional(Serializer::int32()).to_bytes(&None),
             b"skir\xff",
         );
     }
@@ -2531,13 +2531,13 @@ mod tests {
     #[test]
     fn optional_encode_some_delegates() {
         // Some(5) → the inner int32 adapter writes wire byte 5 directly.
-        let bytes = optional_serializer(int32_serializer()).to_bytes(&Some(5_i32));
+        let bytes = Serializer::optional(Serializer::int32()).to_bytes(&Some(5_i32));
         assert_eq!(&bytes[4..], &[5_u8]);
     }
 
     #[test]
     fn optional_binary_round_trip() {
-        let s = optional_serializer(int32_serializer());
+        let s = Serializer::optional(Serializer::int32());
         for v in [None, Some(0_i32), Some(42), Some(-1)] {
             assert_eq!(s.from_bytes(&s.to_bytes(&v), UnrecognizedValues::Drop).unwrap(), v);
         }

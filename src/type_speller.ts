@@ -117,23 +117,23 @@ export class TypeSpeller {
       case "primitive": {
         switch (type.primitive) {
           case "bool":
-            return "crate::skir_client::bool_serializer()";
+            return "crate::skir_client::Serializer::bool()";
           case "int32":
-            return "crate::skir_client::int32_serializer()";
+            return "crate::skir_client::Serializer::int32()";
           case "int64":
-            return "crate::skir_client::int64_serializer()";
+            return "crate::skir_client::Serializer::int64()";
           case "hash64":
-            return "crate::skir_client::hash64_serializer()";
+            return "crate::skir_client::Serializer::hash64()";
           case "float32":
-            return "crate::skir_client::float32_serializer()";
+            return "crate::skir_client::Serializer::float32()";
           case "float64":
-            return "crate::skir_client::float64_serializer()";
+            return "crate::skir_client::Serializer::float64()";
           case "timestamp":
-            return "crate::skir_client::timestamp_serializer()";
+            return "crate::skir_client::Serializer::timestamp()";
           case "string":
-            return "crate::skir_client::string_serializer()";
+            return "crate::skir_client::Serializer::string()";
           case "bytes":
-            return "crate::skir_client::bytes_serializer()";
+            return "crate::skir_client::Serializer::bytes()";
         }
         const _: never = type.primitive;
         throw TypeError();
@@ -143,9 +143,9 @@ export class TypeSpeller {
         const itemSerializer = this.getSerializerExpression(type.item, context);
         if (type.key && keyTypeIsSupported(type.key.keyType)) {
           const suffix = getRustKeySpecSuffix(type.key);
-          return `crate::skir_client::keyed_array_serializer::<${itemType}${suffix}>(${itemSerializer})`;
+          return `crate::skir_client::Serializer::<crate::skir_client::KeyedVec<${itemType}${suffix}>>::keyed_array(${itemSerializer})`;
         } else {
-          return `crate::skir_client::array_serializer(${itemSerializer})`;
+          return `crate::skir_client::Serializer::array(${itemSerializer})`;
         }
       }
       case "optional": {
@@ -153,7 +153,7 @@ export class TypeSpeller {
           type.other,
           context,
         );
-        return `crate::skir_client::optional_serializer(${otherSerializer})`;
+        return `crate::skir_client::Serializer::optional(${otherSerializer})`;
       }
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;

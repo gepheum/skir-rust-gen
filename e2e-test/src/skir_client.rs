@@ -26,19 +26,7 @@ pub use method::Method;
 // reflection (exposed for tests)
 pub use reflection::TypeDescriptor;
 
-// serializers
-pub use serializers::array_serializer;
-pub use serializers::bool_serializer;
-pub use serializers::bytes_serializer;
-pub use serializers::float32_serializer;
-pub use serializers::float64_serializer;
-pub use serializers::hash64_serializer;
-pub use serializers::int32_serializer;
-pub use serializers::int64_serializer;
-pub use serializers::keyed_array_serializer;
-pub use serializers::optional_serializer;
-pub use serializers::string_serializer;
-pub use serializers::timestamp_serializer;
+// serializers (no individual re-exports needed; use Serializer::bool() etc.)
 
 /// Items from the `internal` modules of sub-modules, re-exported as a single
 /// top-level `internal` module.

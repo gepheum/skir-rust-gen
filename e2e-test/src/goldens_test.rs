@@ -4,12 +4,7 @@
 /// verifies each assertion.
 #[cfg(test)]
 mod tests {
-    use crate::skir_client::{
-        array_serializer, bool_serializer, bytes_serializer, float32_serializer,
-        float64_serializer, hash64_serializer, int32_serializer, int64_serializer,
-        optional_serializer, string_serializer, timestamp_serializer, JsonFlavor,
-        Serializer, UnrecognizedValues,
-    };
+    use crate::skir_client::{JsonFlavor, Serializer, UnrecognizedValues};
     use crate::skirout::base::external::gepheum::skir_golden_tests::goldens::{
         Assertion, Assertion_BytesEqual, Assertion_BytesIn, Assertion_ReserializeLargeArray,
         Assertion_ReserializeLargeString, Assertion_ReserializeValue, Assertion_StringEqual,
@@ -139,19 +134,19 @@ mod tests {
 
     fn evaluate_typed_value(tv: &TypedValue) -> Result<Box<dyn EvaluatedValue>, String> {
         match tv {
-            TypedValue::Bool(v) => Ok(ev(*v, bool_serializer())),
-            TypedValue::Int32(v) => Ok(ev(*v, int32_serializer())),
-            TypedValue::Int64(v) => Ok(ev(*v, int64_serializer())),
-            TypedValue::Hash64(v) => Ok(ev(*v, hash64_serializer())),
-            TypedValue::Float32(v) => Ok(ev(*v, float32_serializer())),
-            TypedValue::Float64(v) => Ok(ev(*v, float64_serializer())),
-            TypedValue::Timestamp(v) => Ok(ev(v.clone(), timestamp_serializer())),
-            TypedValue::String(v) => Ok(ev(v.clone(), string_serializer())),
-            TypedValue::Bytes(v) => Ok(ev(v.clone(), bytes_serializer())),
+            TypedValue::Bool(v) => Ok(ev(*v, Serializer::bool())),
+            TypedValue::Int32(v) => Ok(ev(*v, Serializer::int32())),
+            TypedValue::Int64(v) => Ok(ev(*v, Serializer::int64())),
+            TypedValue::Hash64(v) => Ok(ev(*v, Serializer::hash64())),
+            TypedValue::Float32(v) => Ok(ev(*v, Serializer::float32())),
+            TypedValue::Float64(v) => Ok(ev(*v, Serializer::float64())),
+            TypedValue::Timestamp(v) => Ok(ev(v.clone(), Serializer::timestamp())),
+            TypedValue::String(v) => Ok(ev(v.clone(), Serializer::string())),
+            TypedValue::Bytes(v) => Ok(ev(v.clone(), Serializer::bytes())),
             TypedValue::BoolOptional(v) => {
-                Ok(ev(*v, optional_serializer(bool_serializer())))
+                Ok(ev(*v, Serializer::optional(Serializer::bool())))
             }
-            TypedValue::Ints(v) => Ok(ev(v.clone(), array_serializer(int32_serializer()))),
+            TypedValue::Ints(v) => Ok(ev(v.clone(), Serializer::array(Serializer::int32()))),
             TypedValue::Point(v) => Ok(ev((**v).clone(), Point::serializer())),
             TypedValue::Color(v) => Ok(ev((**v).clone(), Color::serializer())),
             TypedValue::MyEnum(v) => Ok(ev((**v).clone(), MyEnum::serializer())),
@@ -593,7 +588,7 @@ mod tests {
 
     fn verify_reserialize_large_string(input: &Assertion_ReserializeLargeString) -> Result<(), String> {
         let s: String = "a".repeat(input.num_chars as usize);
-        let ser = string_serializer();
+        let ser = Serializer::string();
 
         // Dense JSON round-trip
         {
@@ -651,7 +646,7 @@ mod tests {
     fn verify_reserialize_large_array(input: &Assertion_ReserializeLargeArray) -> Result<(), String> {
         let n = input.num_items as usize;
         let array: Vec<i32> = vec![1_i32; n];
-        let ser = array_serializer(int32_serializer());
+        let ser = Serializer::array(Serializer::int32());
 
         let is_correct = |v: &Vec<i32>| v.len() == n && v.iter().all(|&x| x == 1);
 

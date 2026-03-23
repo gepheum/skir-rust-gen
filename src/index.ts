@@ -1,9 +1,8 @@
 // TODO: why do we have an Arc in StructAdapter and EnumAdapter? Can we get rid of it?
 // TODO: format rust code
-// TODO: expose the serializers as static factory functions of Serializer... (Serializer::int32())?
 // TODO: if I have a recursive fiedld, Equal() is not working...
 //   TODO: I think I may want to create my own Rec<>...
-// TODO: SkiRPC
+// TODO: SkirRPC
 // TODO: CI
 
 import {

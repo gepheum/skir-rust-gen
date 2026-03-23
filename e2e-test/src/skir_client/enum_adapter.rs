@@ -10,7 +10,7 @@ use super::super::serializer::{Serializer, TypeAdapter};
 use super::super::serializers::{
     decode_number, decode_number_body, encode_uint32, read_u8, skip_value, write_json_escaped_string,
 };
-use super::super::unrecognized::internal::{UnrecognizedFormat, UnrecognizedVariantData};
+use super::super::unrecognized::{UnrecognizedFormat, UnrecognizedVariantData};
 
 // =============================================================================
 // AnyEntry – maps a variant number to how it should be handled

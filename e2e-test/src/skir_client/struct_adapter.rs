@@ -6,7 +6,8 @@ use std::sync::Arc;
 use super::super::reflection::{StructDescriptor, StructField, TypeDescriptor};
 use super::super::serializer::{Serializer, TypeAdapter};
 use super::super::serializers::{decode_number, encode_uint32, read_u8, skip_value, write_json_escaped_string};
-use super::super::unrecognized::internal::{UnrecognizedFields, UnrecognizedFieldsData, UnrecognizedFormat};
+use super::super::unrecognized::{UnrecognizedFields};
+use super::super::unrecognized::{UnrecognizedFieldsData, UnrecognizedFormat};
 
 // =============================================================================
 // FieldEntry – type-erased per-field adapter

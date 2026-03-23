@@ -157,7 +157,7 @@ class RustSourceFileGenerator {
     }
     this.push(commentify("Set this to None when you're creating a struct."));
     this.push(
-      `  pub _unrecognized: ${namer.option}<crate::skir_client::internal::UnrecognizedFields<${typeName}>>,\n`,
+      `  pub _unrecognized: ${namer.option}<crate::skir_client::UnrecognizedFields<${typeName}>>,\n`,
     );
     this.push("}\n\n");
 
@@ -280,7 +280,7 @@ class RustSourceFileGenerator {
     );
     this.push(`pub enum ${typeName} {\n`);
     this.push(
-      `  Unknown(${namer.option}<crate::skir_client::internal::UnrecognizedVariant<${typeName}>>),\n`,
+      `  Unknown(${namer.option}<crate::skir_client::UnrecognizedVariant<${typeName}>>),\n`,
     );
     const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
       record.record.fields,

@@ -26,7 +26,9 @@ pub use method::Method;
 // reflection (exposed for tests)
 pub use reflection::TypeDescriptor;
 
-// serializers (no individual re-exports needed; use Serializer::bool() etc.)
+// unrecognized
+pub use unrecognized::UnrecognizedFields;
+pub use unrecognized::UnrecognizedVariant;
 
 /// Items from the `internal` modules of sub-modules, re-exported as a single
 /// top-level `internal` module.
@@ -47,10 +49,4 @@ pub mod internal {
     pub use super::enum_adapter::internal::EnumAdapter;
     pub use super::enum_adapter::internal::enum_serializer_from_static;
 
-    // unrecognized::internal
-    pub use super::unrecognized::internal::UnrecognizedFields;
-    pub use super::unrecognized::internal::UnrecognizedFieldsData;
-    pub use super::unrecognized::internal::UnrecognizedFormat;
-    pub use super::unrecognized::internal::UnrecognizedVariant;
-    pub use super::unrecognized::internal::UnrecognizedVariantData;
 }

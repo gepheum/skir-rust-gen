@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use e2e_test::skir_client::service::{RawResponse, ServiceBuilder, ServiceError};
+use e2e_test::skir_client::service::{HttpErrorCode, RawResponse, ServiceBuilder, ServiceError};
 use e2e_test::skirout::base::service::{
     AddUserRequest, AddUserResponse, GetUserRequest, GetUserResponse, User, add_user_method,
     get_user_method,
@@ -61,7 +61,11 @@ async fn main() {
                 let store = store_for_add.clone();
                 async move {
                     if req.user.name.is_empty() {
-                        return Err(ServiceError::bad_request("user name must not be empty"));
+                        return Err(ServiceError::Http {
+                            status_code: HttpErrorCode::_400_BadRequest,
+                            message: "user name must not be empty".into(),
+                            source: None,
+                        });
                     }
                     let mut store = store.lock().unwrap();
                     let user_id = req.user.user_id;

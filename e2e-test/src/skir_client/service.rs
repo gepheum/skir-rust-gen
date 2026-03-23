@@ -140,42 +140,6 @@ pub enum ServiceError {
 }
 
 impl ServiceError {
-    /// Creates a `ServiceError::Http` with status 400 Bad Request.
-    pub fn bad_request(msg: impl Into<String>) -> Self {
-        Self::Http {
-            status_code: HttpErrorCode::_400_BadRequest,
-            message: msg.into(),
-            source: None,
-        }
-    }
-
-    /// Creates a `ServiceError::Http` with status 403 Forbidden.
-    pub fn forbidden(msg: impl Into<String>) -> Self {
-        Self::Http {
-            status_code: HttpErrorCode::_403_Forbidden,
-            message: msg.into(),
-            source: None,
-        }
-    }
-
-    /// Creates a `ServiceError::Http` with status 404 Not Found.
-    pub fn not_found(msg: impl Into<String>) -> Self {
-        Self::Http {
-            status_code: HttpErrorCode::_404_NotFound,
-            message: msg.into(),
-            source: None,
-        }
-    }
-
-    /// Creates a `ServiceError::Http` with status 500 Internal Server Error.
-    pub fn internal(msg: impl Into<String>) -> Self {
-        Self::Http {
-            status_code: HttpErrorCode::_500_InternalServerError,
-            message: msg.into(),
-            source: None,
-        }
-    }
-
     /// Returns the source error, if any.
     ///
     /// For [`ServiceError::Unknown`] this is always `Some`. For

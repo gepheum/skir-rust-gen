@@ -1,12 +1,11 @@
 // Golden tests...
-// TODO: address all lints...
+// TODO: methods
+// TODO: constants
 // TODO: format rust code
 // TODO: if I have a recursive fiedld, Equal() is not working...
 //   TODO: I think I may want to create my own Rec<>...
 // TODO: comments (in code, in runtime, )
 // TODO: look at UTF-8 safety
-// TODO: methods
-// TODO: constants
 // TODO: SkiRPC
 // TODO: CI
 
@@ -383,7 +382,6 @@ class RustSourceFileGenerator {
     this.push(`        "${enumModulePath}",\n`);
     this.push(`        "${enumQualifiedName}",\n`);
     this.push(`        "",\n`);
-    this.push(`        std::collections::HashSet::new(),\n`);
     this.push(`      )\n`);
     this.push(`    });\n`);
     this.push(`  &*ADAPTER\n`);
@@ -494,7 +492,9 @@ class RustSourceFileGenerator {
 
   private writeMethod(method: Method): void {}
 
-  private writeConstant(constant: Constant): void {}
+  private writeConstant(constant: Constant): void {
+    const { namer, typeSpeller } = this;
+  }
 
   private pushSeparator(header: string): void {
     this.push(`// ${"=".repeat(78)}\n`);

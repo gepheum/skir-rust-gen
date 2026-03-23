@@ -160,6 +160,8 @@ pub struct EnumAdapter<T: 'static + Default> {
     get_unrecognized: fn(&T) -> Option<&UnrecognizedVariantData<T>>,
     /// Maps variant number → how to handle it (removed / constant / wrapper).
     number_to_entry: HashMap<i32, AnyEntry>,
+    /// Accumulates removed numbers to pass to the descriptor on finalize.
+    removed_numbers: HashSet<i32>,
     /// Maps variant name → kind_ordinal (for known, non-removed variants).
     name_to_kind_ordinal: HashMap<String, usize>,
     /// Indexed by kind_ordinal. Index 0 is always None (UNKNOWN pseudo-entry).
@@ -179,13 +181,11 @@ impl<T: 'static + Default> EnumAdapter<T> {
         module_path: &str,
         qualified_name: &str,
         doc: &str,
-        removed_numbers: HashSet<i32>,
     ) -> Self {
         let desc = Arc::new(EnumDescriptor::new(
             module_path.to_string(),
             qualified_name.to_string(),
             doc.to_string(),
-            removed_numbers,
         ));
         // Slot 0 is reserved for UNKNOWN (kind_ordinal 0 → no variant entry).
         let kind_ordinal_to_entry = vec![None];
@@ -194,6 +194,7 @@ impl<T: 'static + Default> EnumAdapter<T> {
             wrap_unrecognized,
             get_unrecognized,
             number_to_entry: HashMap::new(),
+            removed_numbers: HashSet::new(),
             name_to_kind_ordinal: HashMap::new(),
             kind_ordinal_to_entry,
             desc_variants: Vec::new(),
@@ -258,6 +259,7 @@ impl<T: 'static + Default> EnumAdapter<T> {
     /// Registers a variant number that was removed from the schema.
     pub fn add_removed_number(&mut self, number: i32) {
         self.number_to_entry.insert(number, AnyEntry::Removed);
+        self.removed_numbers.insert(number);
     }
 
     fn set_kind_ordinal_entry(&mut self, kind_ordinal: usize, entry: Box<dyn VariantEntry<T>>) {
@@ -271,6 +273,7 @@ impl<T: 'static + Default> EnumAdapter<T> {
         self.desc_variants.sort_by_key(|v| v.number());
         let variants = std::mem::take(&mut self.desc_variants);
         self.desc.set_variants(variants);
+        self.desc.set_removed_numbers(std::mem::take(&mut self.removed_numbers));
     }
 
     /// Returns a reference to the pre-allocated [`EnumDescriptor`] for this

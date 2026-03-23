@@ -289,7 +289,7 @@ pub struct StructDescriptor {
     qualified_name: String,
     module_path: String,
     doc: String,
-    removed_numbers: HashSet<i32>,
+    removed_numbers: OnceLock<HashSet<i32>>,
     /// Set once by the parser in pass 2.
     fields: OnceLock<Vec<StructField>>,
     /// Lazily-built lookup tables (name → index, number → index).
@@ -301,7 +301,6 @@ impl StructDescriptor {
         module_path: String,
         qualified_name: String,
         doc: String,
-        removed_numbers: HashSet<i32>,
     ) -> Self {
         let name = qualified_name
             .rfind('.')
@@ -311,7 +310,7 @@ impl StructDescriptor {
             qualified_name,
             module_path,
             doc,
-            removed_numbers,
+            removed_numbers: OnceLock::new(),
             fields: OnceLock::new(),
             lookups: OnceLock::new(),
         }
@@ -330,7 +329,7 @@ impl StructDescriptor {
         &self.doc
     }
     pub fn removed_numbers(&self) -> &HashSet<i32> {
-        &self.removed_numbers
+        self.removed_numbers.get_or_init(HashSet::new)
     }
     pub fn fields(&self) -> &[StructField] {
         self.fields.get().expect("StructDescriptor fields not yet initialized")
@@ -340,6 +339,12 @@ impl StructDescriptor {
     /// fields have been registered. Silently ignored if called more than once.
     pub(super) fn set_fields(&self, fields: Vec<StructField>) {
         self.fields.set(fields).ok();
+    }
+
+    /// Called once by [`struct_adapter::StructAdapter::finalize`] after all
+    /// removed numbers have been registered. Silently ignored if called more than once.
+    pub(super) fn set_removed_numbers(&self, nums: HashSet<i32>) {
+        self.removed_numbers.set(nums).ok();
     }
 
     fn record_id(&self) -> String {
@@ -386,7 +391,7 @@ pub struct EnumDescriptor {
     qualified_name: String,
     module_path: String,
     doc: String,
-    removed_numbers: HashSet<i32>,
+    removed_numbers: OnceLock<HashSet<i32>>,
     /// Set once by the parser in pass 2.
     variants: OnceLock<Vec<EnumVariant>>,
     /// Lazily-built lookup tables (name → index, number → index).
@@ -398,7 +403,6 @@ impl EnumDescriptor {
         module_path: String,
         qualified_name: String,
         doc: String,
-        removed_numbers: HashSet<i32>,
     ) -> Self {
         let name = qualified_name
             .rfind('.')
@@ -408,7 +412,7 @@ impl EnumDescriptor {
             qualified_name,
             module_path,
             doc,
-            removed_numbers,
+            removed_numbers: OnceLock::new(),
             variants: OnceLock::new(),
             lookups: OnceLock::new(),
         }
@@ -427,7 +431,7 @@ impl EnumDescriptor {
         &self.doc
     }
     pub fn removed_numbers(&self) -> &HashSet<i32> {
-        &self.removed_numbers
+        self.removed_numbers.get_or_init(HashSet::new)
     }
     pub fn variants(&self) -> &[EnumVariant] {
         self.variants.get().expect("EnumDescriptor variants not yet initialized")
@@ -437,6 +441,12 @@ impl EnumDescriptor {
     /// variants have been registered. Silently ignored if called more than once.
     pub(super) fn set_variants(&self, variants: Vec<EnumVariant>) {
         self.variants.set(variants).ok();
+    }
+
+    /// Called once by [`enum_adapter::EnumAdapter::finalize`] after all
+    /// removed numbers have been registered. Silently ignored if called more than once.
+    pub(super) fn set_removed_numbers(&self, nums: HashSet<i32>) {
+        self.removed_numbers.set(nums).ok();
     }
 
     fn record_id(&self) -> String {
@@ -604,7 +614,7 @@ fn write_struct_record_json(s: &StructDescriptor, indent: &str, out: &mut String
         out.push_str(&inner);
     }
     out.push(']');
-    let removed = removed_numbers_to_sorted_slice(&s.removed_numbers);
+    let removed = removed_numbers_to_sorted_slice(s.removed_numbers());
     if !removed.is_empty() {
         out.push_str(",\n");
         out.push_str(&inner);
@@ -684,7 +694,7 @@ fn write_enum_record_json(e: &EnumDescriptor, indent: &str, out: &mut String) {
         out.push_str(&inner);
     }
     out.push(']');
-    let removed = removed_numbers_to_sorted_slice(&e.removed_numbers);
+    let removed = removed_numbers_to_sorted_slice(e.removed_numbers());
     if !removed.is_empty() {
         out.push_str(",\n");
         out.push_str(&inner);
@@ -923,18 +933,24 @@ fn parse_record_descriptor_partial(
         .unwrap_or_default();
 
     match kind {
-        "struct" => Ok(RecordDescriptorInner::Struct(Arc::new(StructDescriptor::new(
-            module_path,
-            qualified_name,
-            doc,
-            removed_numbers,
-        )))),
-        "enum" => Ok(RecordDescriptorInner::Enum(Arc::new(EnumDescriptor::new(
-            module_path,
-            qualified_name,
-            doc,
-            removed_numbers,
-        )))),
+        "struct" => {
+            let desc = Arc::new(StructDescriptor::new(
+                module_path,
+                qualified_name,
+                doc,
+            ));
+            desc.set_removed_numbers(removed_numbers);
+            Ok(RecordDescriptorInner::Struct(desc))
+        }
+        "enum" => {
+            let desc = Arc::new(EnumDescriptor::new(
+                module_path,
+                qualified_name,
+                doc,
+            ));
+            desc.set_removed_numbers(removed_numbers);
+            Ok(RecordDescriptorInner::Enum(desc))
+        }
         _ => Err(format!("unknown record kind {:?}", kind)),
     }
 }

@@ -130,13 +130,12 @@ impl<T: 'static + Default> StructAdapter<T> {
     ) -> Self {
         // Pre-allocate the descriptor with an empty fields set so that
         // typeDescriptor() can return a valid Arc even before finalize.
-        // Fields are populated in finalize() via set_fields().
+        // Fields and removed numbers are populated later.
         let desc =
             Arc::new(StructDescriptor::new(
                 module_path.to_string(),
                 qualified_name.to_string(),
                 doc.to_string(),
-                HashSet::new(), // removed_numbers populated after add_removed_number calls
             ));
         StructAdapter {
             get_unrecognized,
@@ -202,7 +201,7 @@ impl<T: 'static + Default> StructAdapter<T> {
             self.slot_to_index[e.entry_number() as usize] = Some(idx);
         }
 
-        // Populate StructDescriptor fields.
+        // Populate StructDescriptor fields and removed numbers.
         let fields: Vec<StructField> = self
             .ordered_entries
             .iter()
@@ -214,6 +213,7 @@ impl<T: 'static + Default> StructAdapter<T> {
             ))
             .collect();
         self.desc.set_fields(fields);
+        self.desc.set_removed_numbers(std::mem::take(&mut self.removed_numbers));
     }
 
     /// Returns a reference to the pre-allocated [`StructDescriptor`] for this

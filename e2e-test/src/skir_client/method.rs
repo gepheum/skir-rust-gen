@@ -4,7 +4,7 @@ use super::serializer::Serializer;
 ///
 /// - `Request` is the type of the request parameter.
 /// - `Response` is the type of the response returned by this method.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Method<Request: 'static, Response: 'static> {
     /// The name of the method.
     pub name: String,

@@ -1427,11 +1427,13 @@ pub(super) fn skip_value(input: &mut &[u8]) -> Result<(), String> {
                 skip_value(input)?;
             }
         }
+        251..=254 => {
+            // Enum wrapper variant with small number (250+N, N=1..=4): skip the
+            // one wrapped value.
+            skip_value(input)?;
+        }
         255 => {
             // Optional absent: nothing further.
-        }
-        _ => {
-            // Unknown wire type; best effort: skip nothing.
         }
     }
     Ok(())

@@ -355,7 +355,16 @@ impl<T: 'static + Default> EnumAdapter<T> {
             serde_json::Value::Array(arr) if arr.len() == 2 => {
                 let num = arr[0].as_i64().unwrap_or(0) as i32;
                 match self.number_to_entry.get(&num) {
-                    None | Some(AnyEntry::Removed) => Ok(T::default()),
+                    None => {
+                        if keep {
+                            let bytes = serde_json::to_vec(v).unwrap_or_default();
+                            let ud = UnrecognizedVariantData::new_from_json(num, bytes);
+                            Ok((self.wrap_unrecognized)(ud))
+                        } else {
+                            Ok(T::default())
+                        }
+                    }
+                    Some(AnyEntry::Removed) => Ok(T::default()),
                     Some(AnyEntry::Constant(_)) => Err(format!(
                         "variant number {} is a constant, not a wrapper",
                         num

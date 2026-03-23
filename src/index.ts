@@ -1,6 +1,3 @@
-// TODO: upload client lib
-// TODO: CI
-
 import {
   type CodeGenerator,
   type Constant,

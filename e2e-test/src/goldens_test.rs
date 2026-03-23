@@ -7,7 +7,8 @@ mod tests {
     use crate::skir_client::{
         array_serializer, bool_serializer, bytes_serializer, float32_serializer,
         float64_serializer, hash64_serializer, int32_serializer, int64_serializer,
-        optional_serializer, string_serializer, timestamp_serializer, Serializer,
+        optional_serializer, string_serializer, timestamp_serializer, JsonFlavor,
+        Serializer, UnrecognizedValues,
     };
     use crate::skirout::base::external::gepheum::skir_golden_tests::goldens::{
         Assertion, Assertion_BytesEqual, Assertion_BytesIn, Assertion_ReserializeLargeArray,
@@ -36,10 +37,6 @@ mod tests {
             &self,
             json: &str,
         ) -> Result<Box<dyn EvaluatedValue>, String>;
-        fn from_bytes_keep_unrecognized(
-            &self,
-            bytes: &[u8],
-        ) -> Result<Box<dyn EvaluatedValue>, String>;
         fn from_bytes_drop_unrecognized(
             &self,
             bytes: &[u8],
@@ -57,11 +54,11 @@ mod tests {
         }
 
         fn to_dense_json(&self) -> String {
-            self.serializer.to_json(&self.value, false)
+            self.serializer.to_json(&self.value, JsonFlavor::Dense)
         }
 
         fn to_readable_json(&self) -> String {
-            self.serializer.to_json(&self.value, true)
+            self.serializer.to_json(&self.value, JsonFlavor::Readable)
         }
 
         fn type_descriptor_json(&self) -> String {
@@ -72,7 +69,7 @@ mod tests {
             &self,
             json: &str,
         ) -> Result<Box<dyn EvaluatedValue>, String> {
-            let value = self.serializer.from_json(json, true)?;
+            let value = self.serializer.from_json(json, UnrecognizedValues::Keep)?;
             Ok(Box::new(EvaluatedValueImpl {
                 value,
                 serializer: self.serializer.clone(),
@@ -83,18 +80,7 @@ mod tests {
             &self,
             json: &str,
         ) -> Result<Box<dyn EvaluatedValue>, String> {
-            let value = self.serializer.from_json(json, false)?;
-            Ok(Box::new(EvaluatedValueImpl {
-                value,
-                serializer: self.serializer.clone(),
-            }))
-        }
-
-        fn from_bytes_keep_unrecognized(
-            &self,
-            bytes: &[u8],
-        ) -> Result<Box<dyn EvaluatedValue>, String> {
-            let value = self.serializer.from_bytes(bytes, true)?;
+            let value = self.serializer.from_json(json, UnrecognizedValues::Drop)?;
             Ok(Box::new(EvaluatedValueImpl {
                 value,
                 serializer: self.serializer.clone(),
@@ -105,7 +91,7 @@ mod tests {
             &self,
             bytes: &[u8],
         ) -> Result<Box<dyn EvaluatedValue>, String> {
-            let value = self.serializer.from_bytes(bytes, false)?;
+            let value = self.serializer.from_bytes(bytes, UnrecognizedValues::Drop)?;
             Ok(Box::new(EvaluatedValueImpl {
                 value,
                 serializer: self.serializer.clone(),
@@ -190,84 +176,84 @@ mod tests {
             TypedValue::PointFromJsonKeepUnrecognized(expr) => {
                 let json = evaluate_string(expr)?;
                 let value = Point::serializer()
-                    .from_json(&json, true)
+                    .from_json(&json, UnrecognizedValues::Keep)
                     .map_err(|e| format!("PointFromJsonKeepUnrecognized: {}", e))?;
                 Ok(ev(value, Point::serializer()))
             }
             TypedValue::PointFromJsonDropUnrecognized(expr) => {
                 let json = evaluate_string(expr)?;
                 let value = Point::serializer()
-                    .from_json(&json, false)
+                    .from_json(&json, UnrecognizedValues::Drop)
                     .map_err(|e| format!("PointFromJsonDropUnrecognized: {}", e))?;
                 Ok(ev(value, Point::serializer()))
             }
             TypedValue::PointFromBytesKeepUnrecognized(expr) => {
                 let bytes = evaluate_bytes(expr)?;
                 let value = Point::serializer()
-                    .from_bytes(&bytes, true)
+                    .from_bytes(&bytes, UnrecognizedValues::Keep)
                     .map_err(|e| format!("PointFromBytesKeepUnrecognized: {}", e))?;
                 Ok(ev(value, Point::serializer()))
             }
             TypedValue::PointFromBytesDropUnrecognized(expr) => {
                 let bytes = evaluate_bytes(expr)?;
                 let value = Point::serializer()
-                    .from_bytes(&bytes, false)
+                    .from_bytes(&bytes, UnrecognizedValues::Drop)
                     .map_err(|e| format!("PointFromBytesDropUnrecognized: {}", e))?;
                 Ok(ev(value, Point::serializer()))
             }
             TypedValue::ColorFromJsonKeepUnrecognized(expr) => {
                 let json = evaluate_string(expr)?;
                 let value = Color::serializer()
-                    .from_json(&json, true)
+                    .from_json(&json, UnrecognizedValues::Keep)
                     .map_err(|e| format!("ColorFromJsonKeepUnrecognized: {}", e))?;
                 Ok(ev(value, Color::serializer()))
             }
             TypedValue::ColorFromJsonDropUnrecognized(expr) => {
                 let json = evaluate_string(expr)?;
                 let value = Color::serializer()
-                    .from_json(&json, false)
+                    .from_json(&json, UnrecognizedValues::Drop)
                     .map_err(|e| format!("ColorFromJsonDropUnrecognized: {}", e))?;
                 Ok(ev(value, Color::serializer()))
             }
             TypedValue::ColorFromBytesKeepUnrecognized(expr) => {
                 let bytes = evaluate_bytes(expr)?;
                 let value = Color::serializer()
-                    .from_bytes(&bytes, true)
+                    .from_bytes(&bytes, UnrecognizedValues::Keep)
                     .map_err(|e| format!("ColorFromBytesKeepUnrecognized: {}", e))?;
                 Ok(ev(value, Color::serializer()))
             }
             TypedValue::ColorFromBytesDropUnrecognized(expr) => {
                 let bytes = evaluate_bytes(expr)?;
                 let value = Color::serializer()
-                    .from_bytes(&bytes, false)
+                    .from_bytes(&bytes, UnrecognizedValues::Drop)
                     .map_err(|e| format!("ColorFromBytesDropUnrecognized: {}", e))?;
                 Ok(ev(value, Color::serializer()))
             }
             TypedValue::MyEnumFromJsonKeepUnrecognized(expr) => {
                 let json = evaluate_string(expr)?;
                 let value = MyEnum::serializer()
-                    .from_json(&json, true)
+                    .from_json(&json, UnrecognizedValues::Keep)
                     .map_err(|e| format!("MyEnumFromJsonKeepUnrecognized: {}", e))?;
                 Ok(ev(value, MyEnum::serializer()))
             }
             TypedValue::MyEnumFromJsonDropUnrecognized(expr) => {
                 let json = evaluate_string(expr)?;
                 let value = MyEnum::serializer()
-                    .from_json(&json, false)
+                    .from_json(&json, UnrecognizedValues::Drop)
                     .map_err(|e| format!("MyEnumFromJsonDropUnrecognized: {}", e))?;
                 Ok(ev(value, MyEnum::serializer()))
             }
             TypedValue::MyEnumFromBytesKeepUnrecognized(expr) => {
                 let bytes = evaluate_bytes(expr)?;
                 let value = MyEnum::serializer()
-                    .from_bytes(&bytes, true)
+                    .from_bytes(&bytes, UnrecognizedValues::Keep)
                     .map_err(|e| format!("MyEnumFromBytesKeepUnrecognized: {}", e))?;
                 Ok(ev(value, MyEnum::serializer()))
             }
             TypedValue::MyEnumFromBytesDropUnrecognized(expr) => {
                 let bytes = evaluate_bytes(expr)?;
                 let value = MyEnum::serializer()
-                    .from_bytes(&bytes, false)
+                    .from_bytes(&bytes, UnrecognizedValues::Drop)
                     .map_err(|e| format!("MyEnumFromBytesDropUnrecognized: {}", e))?;
                 Ok(ev(value, MyEnum::serializer()))
             }
@@ -435,7 +421,7 @@ mod tests {
             buf.extend_from_slice(&expected_bytes[4..]); // payload without "skir"
             buf.push(1); // encodes x = 1 for Point (field 0, small positive varint)
             let point = Point::serializer()
-                .from_bytes(&buf, false)
+                .from_bytes(&buf, UnrecognizedValues::Drop)
                 .map_err(|e| format!("skip-value test failed to parse Point: {}", e))?;
             if point.x != 1 {
                 return Err(format!(
@@ -611,9 +597,9 @@ mod tests {
 
         // Dense JSON round-trip
         {
-            let json = ser.to_json(&s, false);
+            let json = ser.to_json(&s, JsonFlavor::Dense);
             let round_trip = ser
-                .from_json(&json, false)
+                .from_json(&json, UnrecognizedValues::Drop)
                 .map_err(|e| format!("large string dense JSON round-trip: {}", e))?;
             if round_trip != s {
                 return Err(format!(
@@ -625,9 +611,9 @@ mod tests {
 
         // Readable JSON round-trip
         {
-            let json = ser.to_json(&s, true);
+            let json = ser.to_json(&s, JsonFlavor::Readable);
             let round_trip = ser
-                .from_json(&json, false)
+                .from_json(&json, UnrecognizedValues::Drop)
                 .map_err(|e| format!("large string readable JSON round-trip: {}", e))?;
             if round_trip != s {
                 return Err(format!(
@@ -649,7 +635,7 @@ mod tests {
                 ));
             }
             let round_trip = ser
-                .from_bytes(&bytes, false)
+                .from_bytes(&bytes, UnrecognizedValues::Drop)
                 .map_err(|e| format!("large string bytes round-trip: {}", e))?;
             if round_trip != s {
                 return Err(format!(
@@ -671,9 +657,9 @@ mod tests {
 
         // Dense JSON round-trip
         {
-            let json = ser.to_json(&array, false);
+            let json = ser.to_json(&array, JsonFlavor::Dense);
             let round_trip = ser
-                .from_json(&json, false)
+                .from_json(&json, UnrecognizedValues::Drop)
                 .map_err(|e| format!("large array dense JSON round-trip: {}", e))?;
             if !is_correct(&round_trip) {
                 return Err(format!(
@@ -686,9 +672,9 @@ mod tests {
 
         // Readable JSON round-trip
         {
-            let json = ser.to_json(&array, true);
+            let json = ser.to_json(&array, JsonFlavor::Readable);
             let round_trip = ser
-                .from_json(&json, false)
+                .from_json(&json, UnrecognizedValues::Drop)
                 .map_err(|e| format!("large array readable JSON round-trip: {}", e))?;
             if !is_correct(&round_trip) {
                 return Err(format!(
@@ -711,7 +697,7 @@ mod tests {
                 ));
             }
             let round_trip = ser
-                .from_bytes(&bytes, false)
+                .from_bytes(&bytes, UnrecognizedValues::Drop)
                 .map_err(|e| format!("large array bytes round-trip: {}", e))?;
             if !is_correct(&round_trip) {
                 return Err(format!(

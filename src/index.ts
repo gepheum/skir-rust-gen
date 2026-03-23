@@ -1,7 +1,7 @@
 // My serializer should probably not take boolean for keep_unrecognized_fields...
 // TODO: why do we have an Arc in StructAdapter and EnumAdapter? Can we get rid of it?
 // TODO: format rust code
-// TODO: expose the serializers as static factory functions of Serializer...?
+// TODO: expose the serializers as static factory functions of Serializer... (Serializer::int32())?
 // TODO: if I have a recursive fiedld, Equal() is not working...
 //   TODO: I think I may want to create my own Rec<>...
 // TODO: SkiRPC
@@ -560,7 +560,7 @@ class RustSourceFileGenerator {
         `static VALUE: std::sync::LazyLock<${rustType}> = std::sync::LazyLock::new(|| {\n`,
       );
       this.push(
-        `${serializerExpr}.from_json(${jsonLiteral}, false).unwrap()\n`,
+        `${serializerExpr}.from_json(${jsonLiteral}, crate::skir_client::UnrecognizedValues::Drop).unwrap()\n`,
       );
       this.push("});\n");
       this.push("&*VALUE\n");

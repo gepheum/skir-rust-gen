@@ -1,6 +1,33 @@
 use super::reflection::TypeDescriptor;
 
 // =============================================================================
+// JsonFlavor
+// =============================================================================
+
+/// Controls the JSON output format produced by [`Serializer::to_json`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JsonFlavor {
+    /// Compact output with no extra whitespace.
+    Dense,
+    /// Human-readable output with newlines and indentation.
+    Readable,
+}
+
+// =============================================================================
+// UnrecognizedValuesPolicy
+// =============================================================================
+
+/// Controls whether unrecognized fields/variants are preserved during
+/// deserialization.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnrecognizedValues {
+    /// Preserve unrecognized fields and variants (forward-compatibility mode).
+    Keep,
+    /// Discard unrecognized fields and variants.
+    Drop,
+}
+
+// =============================================================================
 // Serializer
 // =============================================================================
 
@@ -25,30 +52,29 @@ impl<T: 'static> std::fmt::Debug for Serializer<T> {
 impl<T: 'static> Serializer<T> {
     /// Serialises `v` to a JSON string.
     ///
-    /// Pass `readable: true` for human-readable (indented) output; `false`
-    /// produces compact (dense) JSON.
-    pub fn to_json(&self, v: &T, readable: bool) -> String {
+    /// Pass [`JsonFlavor::Readable`] for human-readable (indented) output;
+    /// [`JsonFlavor::Dense`] produces compact JSON.
+    pub fn to_json(&self, v: &T, flavor: JsonFlavor) -> String {
         let mut out = String::new();
-        if readable {
-            self.adapter.get().to_json(v, Some("\n"), &mut out);
-        } else {
-            self.adapter.get().to_json(v, None, &mut out);
+        match flavor {
+            JsonFlavor::Readable => self.adapter.get().to_json(v, Some("\n"), &mut out),
+            JsonFlavor::Dense => self.adapter.get().to_json(v, None, &mut out),
         }
         out
     }
 
     /// Deserialises a JSON string into a value of type `T`.
     ///
-    /// Set `keep_unrecognized_values` to preserve fields/variants from a newer
-    /// schema version that are not recognised by this decoder.
+    /// Use [`UnrecognizedValuesPolicy::KeepUnrecognized`] to preserve
+    /// fields/variants from a newer schema version.
     pub fn from_json(
         &self,
         code: &str,
-        keep_unrecognized_values: bool,
+        policy: UnrecognizedValues,
     ) -> Result<T, String> {
         let fv: serde_json::Value =
             serde_json::from_str(code).map_err(|e| e.to_string())?;
-        self.adapter.get().from_json(&fv, keep_unrecognized_values)
+        self.adapter.get().from_json(&fv, policy == UnrecognizedValues::Keep)
     }
 
     /// Serialises `v` to the Skir binary wire format.
@@ -65,19 +91,20 @@ impl<T: 'static> Serializer<T> {
     /// If `bytes` lacks the `"skir"` prefix the payload is treated as a UTF-8
     /// JSON string and parsed via [`Self::from_json`].
     ///
-    /// Set `keep_unrecognized_values` to preserve fields/variants from a newer
-    /// schema version.
+    /// Use [`UnrecognizedValuesPolicy::KeepUnrecognized`] to preserve
+    /// fields/variants from a newer schema version.
     pub fn from_bytes(
         &self,
         bytes: &[u8],
-        keep_unrecognized_values: bool,
+        policy: UnrecognizedValues,
     ) -> Result<T, String> {
+        let keep = policy == UnrecognizedValues::Keep;
         if bytes.starts_with(b"skir") {
             let mut rest = &bytes[4..];
-            self.adapter.get().decode(&mut rest, keep_unrecognized_values)
+            self.adapter.get().decode(&mut rest, keep)
         } else {
             let s = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-            self.from_json(s, keep_unrecognized_values)
+            self.from_json(s, policy)
         }
     }
 

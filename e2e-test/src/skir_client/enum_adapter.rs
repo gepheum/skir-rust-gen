@@ -28,9 +28,8 @@ enum AnyEntry {
 
 trait VariantEntry<T>: Send + Sync {
     fn number(&self) -> i32;
-    fn is_wrapper(&self) -> bool;
-    /// Returns the enum value for a constant variant.
-    fn instance(&self) -> T;
+    /// Returns `Some(value)` for a constant variant, `None` for a wrapper variant.
+    fn constant(&self) -> Option<T>;
     fn to_json(&self, frozen: &T, eol_indent: Option<&str>, out: &mut String);
     fn encode_value(&self, frozen: &T, out: &mut Vec<u8>);
     fn wrap_from_json(&self, v: &serde_json::Value, keep: bool) -> Result<T, String>;
@@ -51,11 +50,8 @@ impl<T: 'static + Clone + Send + Sync> VariantEntry<T> for ConstantEntry<T> {
     fn number(&self) -> i32 {
         self.number
     }
-    fn is_wrapper(&self) -> bool {
-        false
-    }
-    fn instance(&self) -> T {
-        self.instance.clone()
+    fn constant(&self) -> Option<T> {
+        Some(self.instance.clone())
     }
 
     fn to_json(&self, _frozen: &T, eol_indent: Option<&str>, out: &mut String) {
@@ -98,11 +94,8 @@ impl<T: 'static, V: 'static> VariantEntry<T> for WrapperEntry<T, V> {
     fn number(&self) -> i32 {
         self.number
     }
-    fn is_wrapper(&self) -> bool {
-        true
-    }
-    fn instance(&self) -> T {
-        panic!("instance() called on wrapper variant '{}'", self.name)
+    fn constant(&self) -> Option<T> {
+        None
     }
 
     fn to_json(&self, frozen: &T, eol_indent: Option<&str>, out: &mut String) {
@@ -343,13 +336,13 @@ impl<T: 'static + Default> EnumAdapter<T> {
                     None => Ok(T::default()),
                     Some(&ko) => {
                         if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
-                            if entry.is_wrapper() {
-                                return Err(format!(
+                            match entry.constant() {
+                                None => Err(format!(
                                     "variant '{}' is a wrapper, expected a constant",
                                     s
-                                ));
+                                )),
+                                Some(v) => Ok(v),
                             }
-                            Ok(entry.instance())
                         } else {
                             Ok(T::default())
                         }
@@ -381,7 +374,7 @@ impl<T: 'static + Default> EnumAdapter<T> {
                     None => Ok(T::default()),
                     Some(&ko) => {
                         if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
-                            if !entry.is_wrapper() {
+                            if entry.constant().is_some() {
                                 return Err(format!(
                                     "variant '{}' is a constant, not a wrapper",
                                     name
@@ -430,7 +423,7 @@ impl<T: 'static + Default> EnumAdapter<T> {
             Some(AnyEntry::Constant(ko)) => {
                 let ko = *ko;
                 if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
-                    entry.instance()
+                    entry.constant().unwrap_or_default()
                 } else {
                     T::default()
                 }
@@ -452,7 +445,7 @@ impl<T: 'static + Default> EnumAdapter<T> {
             return;
         }
         if let Some(Some(entry)) = self.kind_ordinal_to_entry.get(ko) {
-            if !entry.is_wrapper() {
+            if entry.constant().is_some() {
                 // Constant variant: encoded as a variable-length uint32.
                 encode_uint32(entry.number() as u32, out);
             } else {

@@ -146,16 +146,16 @@ class RustSourceFileGenerator {
       const fieldType = typeSpeller.getRustType(field.type!);
       if (field.isRecursive === "hard") {
         const boxedType = `${namer.option}<${namer.box}<${fieldType}>>`;
-        this.push(`  pub _${field.name.text}_rec: ${boxedType},\n`);
+        this.push(`pub _${field.name.text}_rec: ${boxedType},\n`);
       } else {
         const fieldName = toRustFieldName(field.name.text);
         this.push(commentify(docToCommentText(field.doc)));
-        this.push(`  pub ${fieldName}: ${fieldType},\n`);
+        this.push(`pub ${fieldName}: ${fieldType},\n`);
       }
     }
     this.push(commentify("Set this to None when you're creating a struct."));
     this.push(
-      `  pub _unrecognized: ${namer.option}<crate::skir_client::UnrecognizedFields<${typeName}>>,\n`,
+      `pub _unrecognized: ${namer.option}<crate::skir_client::UnrecognizedFields<${typeName}>>,\n`,
     );
     this.push("}\n\n");
 
@@ -166,24 +166,24 @@ class RustSourceFileGenerator {
     this.push(`impl ${typeName} {\n`);
 
     // default_ref()
-    this.push(`  pub fn default_ref() -> &'static ${typeName} {\n`);
+    this.push(`pub fn default_ref() -> &'static ${typeName} {\n`);
     this.push(
-      `    static D: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(${typeName}::default);\n`,
+      `static D: std::sync::LazyLock<${typeName}> = std::sync::LazyLock::new(${typeName}::default);\n`,
     );
-    this.push("    &D\n");
-    this.push("  }\n");
+    this.push("&D\n");
+    this.push("}\n");
 
     // Getters for hard-recursive fields
     for (const field of hardRecursiveFields) {
       const getterName = toRustFieldName(field.name.text);
       const fieldType = typeSpeller.getRustType(field.type!);
       this.push(commentify(docToCommentText(field.doc)));
-      this.push(`  pub fn ${getterName}(&self) -> &${fieldType} {\n`);
-      this.push(`    match &self._${field.name.text}_rec {\n`);
-      this.push(`      Some(boxed) => boxed.as_ref(),\n`);
-      this.push(`      None => ${fieldType}::default_ref(),\n`);
-      this.push("    }\n");
-      this.push("  }\n");
+      this.push(`pub fn ${getterName}(&self) -> &${fieldType} {\n`);
+      this.push(`match &self._${field.name.text}_rec {\n`);
+      this.push(`Some(boxed) => boxed.as_ref(),\n`);
+      this.push(`None => ${fieldType}::default_ref(),\n`);
+      this.push("}\n");
+      this.push("}\n");
     }
 
     this.push("}\n\n");
@@ -191,20 +191,20 @@ class RustSourceFileGenerator {
     // Manual Default impl — only needed when #[derive(Default)] can't be used.
     if (!allFieldsUseRustDefault) {
       this.push(`impl ${namer.default} for ${typeName} {\n`);
-      this.push(`  fn default() -> Self {\n`);
-      this.push(`    ${typeName} {\n`);
+      this.push(`fn default() -> Self {\n`);
+      this.push(`${typeName} {\n`);
       for (const field of struct.record.fields) {
         if (field.isRecursive === "hard") {
-          this.push(`      _${field.name.text}_rec: None,\n`);
+          this.push(`_${field.name.text}_rec: None,\n`);
         } else {
           const fieldName = toRustFieldName(field.name.text);
           const defaultExpr = typeSpeller.getDefaultExpr(field.type!);
-          this.push(`      ${fieldName}: ${defaultExpr},\n`);
+          this.push(`${fieldName}: ${defaultExpr},\n`);
         }
       }
-      this.push(`      _unrecognized: None,\n`);
-      this.push("    }\n");
-      this.push("  }\n");
+      this.push(`_unrecognized: None,\n`);
+      this.push("}\n");
+      this.push("}\n");
       this.push("}\n\n");
     }
 
@@ -223,13 +223,13 @@ class RustSourceFileGenerator {
         `type Lookup = crate::skir_client::internal::${keySpec.lookupImpl};\n`,
       );
       this.push(`fn get_key(item: &${typeName}) -> ${keySpec.rustKeyType} {\n`);
-      this.push(`  ${keySpec.rustKeyExpr}\n`);
+      this.push(`${keySpec.rustKeyExpr}\n`);
       this.push("}\n");
       this.push(`fn key_extractor() -> &'static str {\n`);
-      this.push(`  "${keySpec.keyExtractor}"\n`);
+      this.push(`"${keySpec.keyExtractor}"\n`);
       this.push("}\n");
       this.push(`fn default_item() -> &'static ${typeName} {\n`);
-      this.push(`  ${typeName}::default_ref()\n`);
+      this.push(`${typeName}::default_ref()\n`);
       this.push("}\n");
       this.push("}\n\n");
     }
@@ -278,7 +278,7 @@ class RustSourceFileGenerator {
     );
     this.push(`pub enum ${typeName} {\n`);
     this.push(
-      `  Unknown(${namer.option}<crate::skir_client::UnrecognizedVariant<${typeName}>>),\n`,
+      `Unknown(${namer.option}<crate::skir_client::UnrecognizedVariant<${typeName}>>),\n`,
     );
     const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
       record.record.fields,
@@ -294,17 +294,17 @@ class RustSourceFileGenerator {
         if (doesWrapperVariantNeedBoxing(variantType)) {
           valueRustType = `${namer.box}<${valueRustType}>`;
         }
-        this.push(`  ${variantName}(${valueRustType}),\n`);
+        this.push(`${variantName}(${valueRustType}),\n`);
       } else {
-        this.push(`  ${variantName},\n`);
+        this.push(`${variantName},\n`);
       }
     }
     this.push("}\n\n");
 
     this.push(`impl ${namer.default} for ${typeName} {\n`);
-    this.push(`  fn default() -> Self {\n`);
-    this.push(`    ${typeName}::Unknown(None)\n`);
-    this.push("  }\n");
+    this.push(`fn default() -> Self {\n`);
+    this.push(`${typeName}::Unknown(None)\n`);
+    this.push("}\n");
     this.push("}\n\n");
     if (this.keyedArrayContext.isEnumUsedAsKey(record.record)) {
       // Write the _kind enum.
@@ -312,12 +312,12 @@ class RustSourceFileGenerator {
         `#[derive(${namer.clone}, ${namer.copy}, ${namer.debug}, ${namer.eq}, ${namer.hash}, ${namer.partialEq})]\n`,
       );
       this.push(`pub enum ${typeName}_kind {\n`);
-      this.push("  Unknown,\n");
+      this.push("Unknown,\n");
       for (const variant of record.record.fields) {
         const variantName = convertCase(variant.name.text, "UpperCamel").concat(
           variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
         );
-        this.push(`  ${variantName},\n`);
+        this.push(`${variantName},\n`);
       }
       this.push("}\n\n");
 
@@ -353,39 +353,35 @@ class RustSourceFileGenerator {
       `fn _adapter() -> &'static crate::skir_client::internal::EnumAdapter<${typeName}> {\n`,
     );
     this.push(
-      `  static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::EnumAdapter<${typeName}>> =\n`,
+      `static ADAPTER: std::sync::LazyLock<crate::skir_client::internal::EnumAdapter<${typeName}>> =\n`,
     );
-    this.push(`    std::sync::LazyLock::new(|| {\n`);
-    this.push(`      crate::skir_client::internal::EnumAdapter::new(\n`);
-    this.push(`        |x: &${typeName}| match x {\n`);
-    this.push(`          ${typeName}::Unknown(_) => 0,\n`);
+    this.push(`std::sync::LazyLock::new(|| {\n`);
+    this.push(`crate::skir_client::internal::EnumAdapter::new(\n`);
+    this.push(`|x: &${typeName}| match x {\n`);
+    this.push(`${typeName}::Unknown(_) => 0,\n`);
     let kindOrdinal = 1;
     for (const variant of record.record.fields) {
       const variantName = convertCase(variant.name.text, "UpperCamel").concat(
         variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
       );
       if (variant.type) {
-        this.push(
-          `          ${typeName}::${variantName}(_) => ${kindOrdinal},\n`,
-        );
+        this.push(`${typeName}::${variantName}(_) => ${kindOrdinal},\n`);
       } else {
-        this.push(`          ${typeName}::${variantName} => ${kindOrdinal},\n`);
+        this.push(`${typeName}::${variantName} => ${kindOrdinal},\n`);
       }
       kindOrdinal++;
     }
-    this.push(`        },\n`);
-    this.push(`        |u| ${typeName}::Unknown(Some(u)),\n`);
+    this.push(`},\n`);
+    this.push(`|u| ${typeName}::Unknown(Some(u)),\n`);
     this.push(
-      `        |x: &${typeName}| match x { ${typeName}::Unknown(Some(u)) => Some(u.as_ref()), _ => None },\n`,
+      `|x: &${typeName}| match x { ${typeName}::Unknown(Some(u)) => Some(u.as_ref()), _ => None },\n`,
     );
-    this.push(`        "${enumModulePath}",\n`);
-    this.push(`        "${enumQualifiedName}",\n`);
-    this.push(
-      `        ${toRustStringLiteral(docToCommentText(record.record.doc))},\n`,
-    );
-    this.push(`      )\n`);
-    this.push(`    });\n`);
-    this.push(`  &*ADAPTER\n`);
+    this.push(`"${enumModulePath}",\n`);
+    this.push(`"${enumQualifiedName}",\n`);
+    this.push(`${toRustStringLiteral(docToCommentText(record.record.doc))},\n`);
+    this.push(`)\n`);
+    this.push(`});\n`);
+    this.push(`&*ADAPTER\n`);
     this.push("}\n");
     this.push(
       `pub fn serializer() -> crate::skir_client::Serializer<${typeName}> {\n`,

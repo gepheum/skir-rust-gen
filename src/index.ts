@@ -1,4 +1,3 @@
-// TODO: so the getters call .clone(): WHY?
 // TODO: upload client lib
 // TODO: CI
 
@@ -433,11 +432,11 @@ class RustSourceFileGenerator {
           }
           const getter =
             field.isRecursive === "hard"
-              ? `|x: &${typeName}| x._${field.name.text}_rec.as_deref().cloned()`
-              : `|x: &${typeName}| x.${fieldName}.clone()`;
+              ? `|x: &${typeName}| &x._${field.name.text}_rec`
+              : `|x: &${typeName}| &x.${fieldName}`;
           const setter =
             field.isRecursive === "hard"
-              ? `|x: &mut ${typeName}, v| x._${field.name.text}_rec = v.map(Box::new)`
+              ? `|x: &mut ${typeName}, v| x._${field.name.text}_rec = v`
               : `|x: &mut ${typeName}, v| x.${fieldName} = v`;
           this.push(
             `(*a).add_field("${field.name.text}", ${field.number}, ${serializerExpr}, ${toRustStringLiteral(docToCommentText(field.doc))}, ${getter}, ${setter});\n`,

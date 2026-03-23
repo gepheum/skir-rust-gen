@@ -39,7 +39,7 @@ pub mod internal {
         number: i32,
         doc: String,
         adapter: Serializer<V>,
-        getter: fn(&T) -> V,
+        getter: fn(&T) -> &V,
         setter: fn(&mut T, V),
     }
 
@@ -61,13 +61,13 @@ pub mod internal {
         }
 
         fn is_entry_default(&self, frozen: &T) -> bool {
-            self.adapter.adapter().is_default(&(self.getter)(frozen))
+            self.adapter.adapter().is_default((self.getter)(frozen))
         }
 
         fn entry_to_json(&self, frozen: &T, eol_indent: Option<&str>, out: &mut String) {
             self.adapter
                 .adapter()
-                .to_json(&(self.getter)(frozen), eol_indent, out);
+                .to_json((self.getter)(frozen), eol_indent, out);
         }
 
         fn set_entry_from_json(
@@ -82,7 +82,7 @@ pub mod internal {
         }
 
         fn encode_entry(&self, frozen: &T, out: &mut Vec<u8>) {
-            self.adapter.adapter().encode(&(self.getter)(frozen), out);
+            self.adapter.adapter().encode((self.getter)(frozen), out);
         }
 
         fn decode_entry(&self, value: &mut T, input: &mut &[u8], keep_unrecognized: bool) {
@@ -159,7 +159,7 @@ pub mod internal {
             number: i32,
             ser: Serializer<V>,
             doc: &str,
-            getter: fn(&T) -> V,
+            getter: fn(&T) -> &V,
             setter: fn(&mut T, V),
         ) {
             let idx = self.ordered_entries.len();

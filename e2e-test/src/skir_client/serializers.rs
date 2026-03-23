@@ -99,9 +99,9 @@ pub mod internal {
 
     /// Returns a [`Serializer`] for hard-recursive optional fields.
     ///
-    /// `None` encodes as `[]` (JSON) / wire `0xf6`; `Some(v)` delegates to
-    /// `other`.
-    pub fn recursive_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Option<T>> {
+    /// The value type is `Option<Box<T>>`, matching the generated struct field
+    /// so the getter can return `&Option<Box<T>>` directly without cloning.
+    pub fn recursive_serializer<T: 'static>(other: Serializer<T>) -> Serializer<Option<Box<T>>> {
         Serializer::new(RecursiveAdapter { other })
     }
 }
@@ -1303,7 +1303,7 @@ impl<T: 'static> TypeAdapter<Option<T>> for OptionalAdapter<T> {
 // RecursiveAdapter
 // =============================================================================
 
-/// Serializer for hard-recursive optional fields (`Option<Box<T>>`-style).
+/// Serializer for hard-recursive struct fields stored as `Option<Box<T>>`.
 ///
 /// The encoded "absent" sentinel is `[]` (JSON) / `0x_f6` wire byte (`246`),
 /// matching how Skir encodes a default struct.  This differs from
@@ -1312,18 +1312,18 @@ pub(crate) struct RecursiveAdapter<T: 'static> {
     other: Serializer<T>,
 }
 
-impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
-    fn is_default(&self, input: &Option<T>) -> bool {
+impl<T: 'static> TypeAdapter<Option<Box<T>>> for RecursiveAdapter<T> {
+    fn is_default(&self, input: &Option<Box<T>>) -> bool {
         match input {
             None => true,
-            Some(v) => self.other.adapter().is_default(v),
+            Some(b) => self.other.adapter().is_default(b),
         }
     }
 
-    fn to_json(&self, input: &Option<T>, eol_indent: Option<&str>, out: &mut String) {
+    fn to_json(&self, input: &Option<Box<T>>, eol_indent: Option<&str>, out: &mut String) {
         match input {
             None => out.push_str("[]"),
-            Some(v) => self.other.adapter().to_json(v, eol_indent, out),
+            Some(b) => self.other.adapter().to_json(b, eol_indent, out),
         }
     }
 
@@ -1331,7 +1331,7 @@ impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
         &self,
         json: &serde_json::Value,
         keep_unrecognized_values: bool,
-    ) -> Result<Option<T>, String> {
+    ) -> Result<Option<Box<T>>, String> {
         // Empty JSON array `[]` or number `0` → absent.
         if let serde_json::Value::Array(arr) = json {
             if arr.is_empty() {
@@ -1344,14 +1344,14 @@ impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
         self.other
             .adapter()
             .from_json(json, keep_unrecognized_values)
-            .map(Some)
+            .map(|v| Some(Box::new(v)))
     }
 
     // None → wire 246 (= empty struct/array); Some(v) → delegate.
-    fn encode(&self, input: &Option<T>, out: &mut Vec<u8>) {
+    fn encode(&self, input: &Option<Box<T>>, out: &mut Vec<u8>) {
         match input {
             None => out.push(246),
-            Some(v) => self.other.adapter().encode(v, out),
+            Some(b) => self.other.adapter().encode(b, out),
         }
     }
 
@@ -1360,7 +1360,7 @@ impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
         &self,
         input: &mut &[u8],
         keep_unrecognized_values: bool,
-    ) -> Result<Option<T>, String> {
+    ) -> Result<Option<Box<T>>, String> {
         match input.first() {
             Some(&246) | Some(&0) => {
                 *input = &input[1..];
@@ -1370,7 +1370,7 @@ impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
                 .other
                 .adapter()
                 .decode(input, keep_unrecognized_values)
-                .map(Some),
+                .map(|v| Some(Box::new(v))),
         }
     }
 
@@ -1378,7 +1378,7 @@ impl<T: 'static> TypeAdapter<Option<T>> for RecursiveAdapter<T> {
         self.other.adapter().type_descriptor()
     }
 
-    fn clone_box(&self) -> Box<dyn TypeAdapter<Option<T>>> {
+    fn clone_box(&self) -> Box<dyn TypeAdapter<Option<Box<T>>>> {
         Box::new(RecursiveAdapter {
             other: self.other.clone(),
         })

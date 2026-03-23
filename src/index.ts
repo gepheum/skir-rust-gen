@@ -1,5 +1,4 @@
-// TODO: if I have a recursive fiedld, Equal() is not working...
-//   TODO: I think I may want to create my own Rec<>...
+// TODO: so the getters call .clone(): WHY?
 // TODO: upload client lib
 // TODO: CI
 
@@ -144,11 +143,22 @@ class RustSourceFileGenerator {
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
       const fieldType = typeSpeller.getRustType(field.type!);
+      const fieldName = toRustFieldName(field.name.text);
       if (field.isRecursive === "hard") {
+        const recFieldName = `_${field.name.text}_rec`;
         const boxedType = `${namer.option}<${namer.box}<${fieldType}>>`;
-        this.push(`pub _${field.name.text}_rec: ${boxedType},\n`);
+        this.push(
+          commentify([
+            docToCommentText(field.doc),
+            "Recursive field. Noxed and optional to avoid infinite size.",
+            "None is equivalent to the default value.",
+            `Use \`${fieldName}()\` to read this field without having to handle the Option,`,
+            "but be careful not to call it from a recursive function as it may cause",
+            "infinite recursion.",
+          ]),
+        );
+        this.push(`pub ${recFieldName}: ${boxedType},\n`);
       } else {
-        const fieldName = toRustFieldName(field.name.text);
         this.push(commentify(docToCommentText(field.doc)));
         this.push(`pub ${fieldName}: ${fieldType},\n`);
       }

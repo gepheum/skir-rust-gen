@@ -4,6 +4,7 @@ import {
 } from "enums.skir";
 import * as car from "vehicles/car.skir";
 
+/// A point in 2D space
 struct Point {
   x: int32;
   y: int32;

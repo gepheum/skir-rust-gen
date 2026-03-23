@@ -143,6 +143,7 @@ class RustSourceFileGenerator {
     const deriveList = allFieldsUseRustDefault
       ? `${namer.clone}, ${namer.debug}, ${namer.partialEq}, ${namer.default}`
       : `${namer.clone}, ${namer.debug}, ${namer.partialEq}`;
+    this.push(commentify(docToCommentText(struct.record.doc)));
     this.push(`#[derive(${deriveList})]\n`);
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
@@ -152,9 +153,11 @@ class RustSourceFileGenerator {
         this.push(`  pub _${field.name.text}_rec: ${boxedType},\n`);
       } else {
         const fieldName = toRustFieldName(field.name.text);
+        this.push(commentify(docToCommentText(field.doc)));
         this.push(`  pub ${fieldName}: ${fieldType},\n`);
       }
     }
+    this.push(commentify("Set this to None when you're creating a struct."));
     this.push(
       `  pub _unrecognized: ${namer.option}<crate::skir_client::internal::UnrecognizedFields<${typeName}>>,\n`,
     );
@@ -178,6 +181,7 @@ class RustSourceFileGenerator {
     for (const field of hardRecursiveFields) {
       const getterName = toRustFieldName(field.name.text);
       const fieldType = typeSpeller.getRustType(field.type!);
+      this.push(commentify(docToCommentText(field.doc)));
       this.push(`  pub fn ${getterName}(&self) -> &${fieldType} {\n`);
       this.push(`    match &self._${field.name.text}_rec {\n`);
       this.push(`      Some(boxed) => boxed.as_ref(),\n`);
@@ -230,9 +234,7 @@ class RustSourceFileGenerator {
       this.push("}\n");
       this.push("}\n\n");
     }
-    const structModulePath = "crate::skirout::".concat(
-      this.moduleSpec.path.replace(/\.rs$/, "").replace(/\//g, "::"),
-    );
+    const structModulePath = this.moduleSpec.skirModule!.path;
     const structQualifiedName = struct.recordAncestors
       .map((r) => r.name.text)
       .join(".");
@@ -247,7 +249,7 @@ class RustSourceFileGenerator {
     this.push(`crate::skir_client::internal::StructAdapter::new(\n`);
     this.push(`"${structModulePath}",\n`);
     this.push(`"${structQualifiedName}",\n`);
-    this.push(`"",\n`);
+    this.push(`${toRustStringLiteral(docToCommentText(struct.record.doc))},\n`);
     this.push(`|x: &${typeName}| &x._unrecognized,\n`);
     this.push(`|x: &mut ${typeName}, u| x._unrecognized = u,\n`);
     this.push(`)\n`);
@@ -271,6 +273,7 @@ class RustSourceFileGenerator {
       "enum ".concat(record.recordAncestors.map((r) => r.name.text).join(".")),
     );
     const typeName = getTypeName(record);
+    this.push(commentify(docToCommentText(record.record.doc)));
     this.push(
       `#[derive(${namer.debug}, ${namer.clone}, ${namer.partialEq})]\n`,
     );
@@ -285,6 +288,7 @@ class RustSourceFileGenerator {
       const variantName = convertCase(variant.name.text, "UpperCamel").concat(
         variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
       );
+      this.push(commentify(docToCommentText(variant.doc)));
       if (variant.type) {
         const variantType = variant.type!;
         let valueRustType = typeSpeller.getRustType(variantType);
@@ -341,9 +345,7 @@ class RustSourceFileGenerator {
       this.push("}\n");
       this.push("}\n\n");
     }
-    const enumModulePath = "crate::skirout::".concat(
-      this.moduleSpec.path.replace(/\.rs$/, "").replace(/\//g, "::"),
-    );
+    const enumModulePath = this.moduleSpec.skirModule!.path;
     const enumQualifiedName = record.recordAncestors
       .map((r) => r.name.text)
       .join(".");
@@ -379,7 +381,9 @@ class RustSourceFileGenerator {
     );
     this.push(`        "${enumModulePath}",\n`);
     this.push(`        "${enumQualifiedName}",\n`);
-    this.push(`        "",\n`);
+    this.push(
+      `        ${toRustStringLiteral(docToCommentText(record.record.doc))},\n`,
+    );
     this.push(`      )\n`);
     this.push(`    });\n`);
     this.push(`  &*ADAPTER\n`);
@@ -431,7 +435,7 @@ class RustSourceFileGenerator {
               ? `|x: &mut ${typeName}, v| x._${field.name.text}_rec = v.map(Box::new)`
               : `|x: &mut ${typeName}, v| x.${fieldName} = v`;
           this.push(
-            `(*a).add_field("${field.name.text}", ${field.number}, ${serializerExpr}, "", ${getter}, ${setter});\n`,
+            `(*a).add_field("${field.name.text}", ${field.number}, ${serializerExpr}, ${toRustStringLiteral(docToCommentText(field.doc))}, ${getter}, ${setter});\n`,
           );
         }
         this.push("(*a).finalize();\n");
@@ -470,11 +474,11 @@ class RustSourceFileGenerator {
               getValueFn = `|x| match x { ${typeName}::${variantName}(v) => v, _ => unreachable!() }`;
             }
             this.push(
-              `(*a).add_wrapper_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, ${serializerExpr}, "", ${wrapFn}, ${getValueFn});\n`,
+              `(*a).add_wrapper_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, ${serializerExpr}, ${toRustStringLiteral(docToCommentText(variant.doc))}, ${wrapFn}, ${getValueFn});\n`,
             );
           } else {
             this.push(
-              `(*a).add_constant_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, "", ${typeName}::${variantName});\n`,
+              `(*a).add_constant_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, ${toRustStringLiteral(docToCommentText(variant.doc))}, ${typeName}::${variantName});\n`,
             );
           }
           kindOrdinal++;
@@ -756,7 +760,7 @@ function commentify(textOrLines: string | readonly string[]): string {
   }
   return text
     .split("\n")
-    .map((line) => (line.length > 0 ? `// ${line}\n` : `//\n`))
+    .map((line) => (line.length > 0 ? `/// ${line}\n` : `///\n`))
     .join("");
 }
 

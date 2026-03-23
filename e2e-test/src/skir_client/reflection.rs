@@ -104,7 +104,10 @@ pub struct ArrayDescriptor {
 
 impl ArrayDescriptor {
     pub(super) fn new(item_type: TypeDescriptor, key_extractor: String) -> Self {
-        Self { item_type, key_extractor }
+        Self {
+            item_type,
+            key_extractor,
+        }
     }
 
     /// The type descriptor for each array element.
@@ -140,13 +143,13 @@ pub struct StructField {
 }
 
 impl StructField {
-    pub(super) fn new(
-        name: String,
-        number: i32,
-        field_type: TypeDescriptor,
-        doc: String,
-    ) -> Self {
-        StructField { name, number, field_type, doc }
+    pub(super) fn new(name: String, number: i32, field_type: TypeDescriptor, doc: String) -> Self {
+        StructField {
+            name,
+            number,
+            field_type,
+            doc,
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -217,7 +220,12 @@ impl EnumWrapperVariant {
         variant_type: TypeDescriptor,
         doc: String,
     ) -> Self {
-        EnumWrapperVariant { name, number, variant_type, doc }
+        EnumWrapperVariant {
+            name,
+            number,
+            variant_type,
+            doc,
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -297,14 +305,11 @@ pub struct StructDescriptor {
 }
 
 impl StructDescriptor {
-    pub(super) fn new(
-        module_path: String,
-        qualified_name: String,
-        doc: String,
-    ) -> Self {
-        let name = qualified_name
-            .rfind('.')
-            .map_or_else(|| qualified_name.clone(), |i| qualified_name[i + 1..].to_string());
+    pub(super) fn new(module_path: String, qualified_name: String, doc: String) -> Self {
+        let name = qualified_name.rfind('.').map_or_else(
+            || qualified_name.clone(),
+            |i| qualified_name[i + 1..].to_string(),
+        );
         StructDescriptor {
             name,
             qualified_name,
@@ -332,7 +337,9 @@ impl StructDescriptor {
         self.removed_numbers.get_or_init(HashSet::new)
     }
     pub fn fields(&self) -> &[StructField] {
-        self.fields.get().expect("StructDescriptor fields not yet initialized")
+        self.fields
+            .get()
+            .expect("StructDescriptor fields not yet initialized")
     }
 
     /// Called once by [`struct_adapter::StructAdapter::finalize`] after all
@@ -354,10 +361,16 @@ impl StructDescriptor {
     fn ensure_lookups(&self) -> &(HashMap<String, usize>, HashMap<i32, usize>) {
         self.lookups.get_or_init(|| {
             let fields = self.fields();
-            let by_name =
-                fields.iter().enumerate().map(|(i, f)| (f.name.clone(), i)).collect();
-            let by_number =
-                fields.iter().enumerate().map(|(i, f)| (f.number, i)).collect();
+            let by_name = fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| (f.name.clone(), i))
+                .collect();
+            let by_number = fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| (f.number, i))
+                .collect();
             (by_name, by_number)
         })
     }
@@ -399,14 +412,11 @@ pub struct EnumDescriptor {
 }
 
 impl EnumDescriptor {
-    pub(super) fn new(
-        module_path: String,
-        qualified_name: String,
-        doc: String,
-    ) -> Self {
-        let name = qualified_name
-            .rfind('.')
-            .map_or_else(|| qualified_name.clone(), |i| qualified_name[i + 1..].to_string());
+    pub(super) fn new(module_path: String, qualified_name: String, doc: String) -> Self {
+        let name = qualified_name.rfind('.').map_or_else(
+            || qualified_name.clone(),
+            |i| qualified_name[i + 1..].to_string(),
+        );
         EnumDescriptor {
             name,
             qualified_name,
@@ -434,7 +444,9 @@ impl EnumDescriptor {
         self.removed_numbers.get_or_init(HashSet::new)
     }
     pub fn variants(&self) -> &[EnumVariant] {
-        self.variants.get().expect("EnumDescriptor variants not yet initialized")
+        self.variants
+            .get()
+            .expect("EnumDescriptor variants not yet initialized")
     }
 
     /// Called once by [`enum_adapter::EnumAdapter::finalize`] after all
@@ -461,8 +473,11 @@ impl EnumDescriptor {
                 .enumerate()
                 .map(|(i, v)| (v.name().to_string(), i))
                 .collect();
-            let by_number =
-                variants.iter().enumerate().map(|(i, v)| (v.number(), i)).collect();
+            let by_number = variants
+                .iter()
+                .enumerate()
+                .map(|(i, v)| (v.number(), i))
+                .collect();
             (by_name, by_number)
         })
     }
@@ -854,7 +869,13 @@ fn parse_type_descriptor_from_value(root: &serde_json::Value) -> Result<TypeDesc
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
-        record_id_to_bundle.insert(rid, RecordBundle { descriptor, fields_or_variants });
+        record_id_to_bundle.insert(
+            rid,
+            RecordBundle {
+                descriptor,
+                fields_or_variants,
+            },
+        );
     }
 
     // ── Pass 2: fill in fields / variants ─────────────────────────────────────
@@ -874,14 +895,21 @@ fn parse_type_descriptor_from_value(root: &serde_json::Value) -> Result<TypeDesc
                 for fv in &fields_or_variants {
                     let name = get_json_str(fv, "name").to_string();
                     let number = get_json_i32(fv, "number");
-                    let type_val = fv.get("type").ok_or_else(|| {
-                        format!("struct field {:?} is missing 'type'", name)
-                    })?;
+                    let type_val = fv
+                        .get("type")
+                        .ok_or_else(|| format!("struct field {:?} is missing 'type'", name))?;
                     let field_type = parse_type_signature(type_val, &record_id_to_bundle)?;
                     let doc = get_json_str(fv, "doc").to_string();
-                    fields.push(StructField { name, number, field_type, doc });
+                    fields.push(StructField {
+                        name,
+                        number,
+                        field_type,
+                        doc,
+                    });
                 }
-                s.fields.set(fields).map_err(|_| "fields already set".to_string())?;
+                s.fields
+                    .set(fields)
+                    .map_err(|_| "fields already set".to_string())?;
             }
             RecordDescriptorInner::Enum(e) => {
                 let mut variants = Vec::with_capacity(fields_or_variants.len());
@@ -890,8 +918,7 @@ fn parse_type_descriptor_from_value(root: &serde_json::Value) -> Result<TypeDesc
                     let number = get_json_i32(vv, "number");
                     let doc = get_json_str(vv, "doc").to_string();
                     if let Some(type_val) = vv.get("type") {
-                        let variant_type =
-                            parse_type_signature(type_val, &record_id_to_bundle)?;
+                        let variant_type = parse_type_signature(type_val, &record_id_to_bundle)?;
                         variants.push(EnumVariant::Wrapper(EnumWrapperVariant {
                             name,
                             number,
@@ -906,7 +933,9 @@ fn parse_type_descriptor_from_value(root: &serde_json::Value) -> Result<TypeDesc
                         }));
                     }
                 }
-                e.variants.set(variants).map_err(|_| "variants already set".to_string())?;
+                e.variants
+                    .set(variants)
+                    .map_err(|_| "variants already set".to_string())?;
             }
         }
     }
@@ -918,9 +947,7 @@ fn parse_type_descriptor_from_value(root: &serde_json::Value) -> Result<TypeDesc
     parse_type_signature(type_val, &record_id_to_bundle)
 }
 
-fn parse_record_descriptor_partial(
-    v: &serde_json::Value,
-) -> Result<RecordDescriptorInner, String> {
+fn parse_record_descriptor_partial(v: &serde_json::Value) -> Result<RecordDescriptorInner, String> {
     let kind = get_json_str(v, "kind");
     let id_str = get_json_str(v, "id");
     let doc = get_json_str(v, "doc").to_string();
@@ -929,25 +956,21 @@ fn parse_record_descriptor_partial(
     let removed_numbers: HashSet<i32> = v
         .get("removed_numbers")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|n| n.as_i64().map(|n| n as i32)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|n| n.as_i64().map(|n| n as i32))
+                .collect()
+        })
         .unwrap_or_default();
 
     match kind {
         "struct" => {
-            let desc = Arc::new(StructDescriptor::new(
-                module_path,
-                qualified_name,
-                doc,
-            ));
+            let desc = Arc::new(StructDescriptor::new(module_path, qualified_name, doc));
             desc.set_removed_numbers(removed_numbers);
             Ok(RecordDescriptorInner::Struct(desc))
         }
         "enum" => {
-            let desc = Arc::new(EnumDescriptor::new(
-                module_path,
-                qualified_name,
-                doc,
-            ));
+            let desc = Arc::new(EnumDescriptor::new(module_path, qualified_name, doc));
             desc.set_removed_numbers(removed_numbers);
             Ok(RecordDescriptorInner::Enum(desc))
         }
@@ -960,9 +983,9 @@ fn parse_type_signature(
     record_id_to_bundle: &HashMap<String, RecordBundle>,
 ) -> Result<TypeDescriptor, String> {
     let kind = get_json_str(v, "kind");
-    let val = v.get("value").ok_or_else(|| {
-        format!("type signature missing 'value' (kind={:?})", kind)
-    })?;
+    let val = v
+        .get("value")
+        .ok_or_else(|| format!("type signature missing 'value' (kind={:?})", kind))?;
 
     match kind {
         "primitive" => {
@@ -995,7 +1018,10 @@ fn parse_type_signature(
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            Ok(TypeDescriptor::Array(Box::new(ArrayDescriptor { item_type, key_extractor })))
+            Ok(TypeDescriptor::Array(Box::new(ArrayDescriptor {
+                item_type,
+                key_extractor,
+            })))
         }
         "record" => {
             let record_id = val.as_str().unwrap_or("");
@@ -1013,7 +1039,10 @@ fn get_json_str<'a>(v: &'a serde_json::Value, key: &str) -> &'a str {
 }
 
 fn get_json_i32(v: &serde_json::Value, key: &str) -> i32 {
-    v.get(key).and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0)
+    v.get(key)
+        .and_then(|v| v.as_i64())
+        .map(|n| n as i32)
+        .unwrap_or(0)
 }
 
 fn split_record_id(id: &str) -> Result<(String, String), String> {
@@ -1095,12 +1124,7 @@ mod tests {
             let td = TypeDescriptor::Primitive(prim);
             let json = td.as_json();
             let reparsed = TypeDescriptor::parse_from_json(&json).unwrap();
-            assert_eq!(
-                json,
-                reparsed.as_json(),
-                "round-trip failed for {:?}",
-                prim
-            );
+            assert_eq!(json, reparsed.as_json(), "round-trip failed for {:?}", prim);
         }
     }
 
@@ -1108,9 +1132,8 @@ mod tests {
 
     #[test]
     fn optional_round_trip() {
-        let td = TypeDescriptor::Optional(Box::new(TypeDescriptor::Primitive(
-            PrimitiveType::String,
-        )));
+        let td =
+            TypeDescriptor::Optional(Box::new(TypeDescriptor::Primitive(PrimitiveType::String)));
         let json = td.as_json();
         assert_round_trip(&json);
     }
@@ -1211,7 +1234,9 @@ mod tests {
     #[test]
     fn struct_field_by_name() {
         let td = TypeDescriptor::parse_from_json(SIMPLE_STRUCT_JSON).unwrap();
-        let TypeDescriptor::Struct(s) = &td else { panic!() };
+        let TypeDescriptor::Struct(s) = &td else {
+            panic!()
+        };
         let f = s.field_by_name("name").unwrap();
         assert_eq!(f.number(), 2);
         assert!(s.field_by_name("missing").is_none());
@@ -1220,7 +1245,9 @@ mod tests {
     #[test]
     fn struct_field_by_number() {
         let td = TypeDescriptor::parse_from_json(SIMPLE_STRUCT_JSON).unwrap();
-        let TypeDescriptor::Struct(s) = &td else { panic!() };
+        let TypeDescriptor::Struct(s) = &td else {
+            panic!()
+        };
         let f = s.field_by_number(1).unwrap();
         assert_eq!(f.name(), "id");
         assert!(s.field_by_number(99).is_none());
@@ -1252,7 +1279,9 @@ mod tests {
   ]
 }"#;
         let td = TypeDescriptor::parse_from_json(json).unwrap();
-        let TypeDescriptor::Struct(s) = td else { panic!() };
+        let TypeDescriptor::Struct(s) = td else {
+            panic!()
+        };
         assert_eq!(s.doc(), "A struct.");
         assert!(s.removed_numbers().contains(&3));
         assert!(s.removed_numbers().contains(&7));
@@ -1276,7 +1305,9 @@ mod tests {
   ]
 }"#;
         let td = TypeDescriptor::parse_from_json(json).unwrap();
-        let TypeDescriptor::Struct(s) = td else { panic!() };
+        let TypeDescriptor::Struct(s) = td else {
+            panic!()
+        };
         assert_eq!(s.name(), "Inner");
         assert_eq!(s.qualified_name(), "Outer.Inner");
     }
@@ -1328,7 +1359,9 @@ mod tests {
     #[test]
     fn enum_constant_variant() {
         let td = TypeDescriptor::parse_from_json(SIMPLE_ENUM_JSON).unwrap();
-        let TypeDescriptor::Enum(e) = &td else { panic!() };
+        let TypeDescriptor::Enum(e) = &td else {
+            panic!()
+        };
         let v = e.variant_by_name("Red").unwrap();
         assert_eq!(v.number(), 1);
         assert!(matches!(v, EnumVariant::Constant(_)));
@@ -1338,7 +1371,9 @@ mod tests {
     #[test]
     fn enum_wrapper_variant() {
         let td = TypeDescriptor::parse_from_json(SIMPLE_ENUM_JSON).unwrap();
-        let TypeDescriptor::Enum(e) = &td else { panic!() };
+        let TypeDescriptor::Enum(e) = &td else {
+            panic!()
+        };
         let v = e.variant_by_number(3).unwrap();
         assert_eq!(v.name(), "Blue");
         assert!(matches!(v, EnumVariant::Wrapper(_)));
@@ -1348,7 +1383,9 @@ mod tests {
     #[test]
     fn enum_variant_by_name_missing() {
         let td = TypeDescriptor::parse_from_json(SIMPLE_ENUM_JSON).unwrap();
-        let TypeDescriptor::Enum(e) = &td else { panic!() };
+        let TypeDescriptor::Enum(e) = &td else {
+            panic!()
+        };
         assert!(e.variant_by_name("Purple").is_none());
     }
 
@@ -1427,14 +1464,19 @@ mod tests {
   ]
 }"#;
         let td = TypeDescriptor::parse_from_json(json).unwrap();
-        let TypeDescriptor::Struct(outer) = &td else { panic!() };
+        let TypeDescriptor::Struct(outer) = &td else {
+            panic!()
+        };
         let inner_field = outer.field_by_name("inner").unwrap();
         let TypeDescriptor::Struct(inner) = inner_field.field_type() else {
             panic!("field type should be Struct");
         };
         assert_eq!(inner.name(), "Inner");
         let x = inner.field_by_name("x").unwrap();
-        assert!(matches!(x.field_type(), TypeDescriptor::Primitive(PrimitiveType::Int32)));
+        assert!(matches!(
+            x.field_type(),
+            TypeDescriptor::Primitive(PrimitiveType::Int32)
+        ));
     }
 
     // ── parse errors ──────────────────────────────────────────────────────────

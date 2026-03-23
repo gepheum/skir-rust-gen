@@ -1,9 +1,9 @@
+pub mod enum_adapter;
 pub mod keyed_vec;
 pub mod method;
 pub mod reflection;
 pub mod serializer;
 pub mod serializers;
-pub mod enum_adapter;
 pub mod struct_adapter;
 pub mod unrecognized;
 
@@ -48,5 +48,4 @@ pub mod internal {
     // enum_adapter::internal
     pub use super::enum_adapter::internal::EnumAdapter;
     pub use super::enum_adapter::internal::enum_serializer_from_static;
-
 }

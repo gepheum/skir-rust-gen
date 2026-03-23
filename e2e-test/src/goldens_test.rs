@@ -5,13 +5,13 @@
 #[cfg(test)]
 mod tests {
     use crate::skir_client::{JsonFlavor, Serializer, UnrecognizedValues};
+    use crate::skirout::base::external::gepheum::skir_golden_tests::goldens::unit_tests_const;
     use crate::skirout::base::external::gepheum::skir_golden_tests::goldens::{
         Assertion, Assertion_BytesEqual, Assertion_BytesIn, Assertion_ReserializeLargeArray,
         Assertion_ReserializeLargeString, Assertion_ReserializeValue, Assertion_StringEqual,
-        Assertion_StringIn, BytesExpression, Color, KeyedArrays, MyEnum, Point, RecEnum,
-        RecStruct, StringExpression, TypedValue,
+        Assertion_StringIn, BytesExpression, Color, KeyedArrays, MyEnum, Point, RecEnum, RecStruct,
+        StringExpression, TypedValue,
     };
-    use crate::skirout::base::external::gepheum::skir_golden_tests::goldens::unit_tests_const;
 
     // =========================================================================
     // EvaluatedValue — type-erased value + serializer
@@ -86,7 +86,9 @@ mod tests {
             &self,
             bytes: &[u8],
         ) -> Result<Box<dyn EvaluatedValue>, String> {
-            let value = self.serializer.from_bytes(bytes, UnrecognizedValues::Drop)?;
+            let value = self
+                .serializer
+                .from_bytes(bytes, UnrecognizedValues::Drop)?;
             Ok(Box::new(EvaluatedValueImpl {
                 value,
                 serializer: self.serializer.clone(),
@@ -143,9 +145,7 @@ mod tests {
             TypedValue::Timestamp(v) => Ok(ev(v.clone(), Serializer::timestamp())),
             TypedValue::String(v) => Ok(ev(v.clone(), Serializer::string())),
             TypedValue::Bytes(v) => Ok(ev(v.clone(), Serializer::bytes())),
-            TypedValue::BoolOptional(v) => {
-                Ok(ev(*v, Serializer::optional(Serializer::bool())))
-            }
+            TypedValue::BoolOptional(v) => Ok(ev(*v, Serializer::optional(Serializer::bool()))),
             TypedValue::Ints(v) => Ok(ev(v.clone(), Serializer::array(Serializer::int32()))),
             TypedValue::Point(v) => Ok(ev((**v).clone(), Point::serializer())),
             TypedValue::Color(v) => Ok(ev((**v).clone(), Color::serializer())),
@@ -350,10 +350,7 @@ mod tests {
                 // Verify bytes
                 let bytes_ev = evaluate_typed_value(input_tv)?;
                 let actual_bytes = bytes_ev.to_bytes();
-                let found_bytes = input
-                    .expected_bytes
-                    .iter()
-                    .any(|exp| *exp == actual_bytes);
+                let found_bytes = input.expected_bytes.iter().any(|exp| *exp == actual_bytes);
                 if !found_bytes {
                     let expected_hex = input
                         .expected_bytes
@@ -570,10 +567,9 @@ mod tests {
                 ));
             }
             // Verify round-trip of the type descriptor itself
-            let parsed = crate::skir_client::reflection::TypeDescriptor::parse_from_json(
-                expected_td,
-            )
-            .map_err(|e| format!("failed to parse type descriptor: {}", e))?;
+            let parsed =
+                crate::skir_client::reflection::TypeDescriptor::parse_from_json(expected_td)
+                    .map_err(|e| format!("failed to parse type descriptor: {}", e))?;
             let reparsed_td = parsed.as_json();
             if reparsed_td != *expected_td {
                 return Err(format!(
@@ -586,7 +582,9 @@ mod tests {
         Ok(())
     }
 
-    fn verify_reserialize_large_string(input: &Assertion_ReserializeLargeString) -> Result<(), String> {
+    fn verify_reserialize_large_string(
+        input: &Assertion_ReserializeLargeString,
+    ) -> Result<(), String> {
         let s: String = "a".repeat(input.num_chars as usize);
         let ser = Serializer::string();
 
@@ -599,7 +597,8 @@ mod tests {
             if round_trip != s {
                 return Err(format!(
                     "large string dense JSON round-trip mismatch\n  actual len: {}\n  expected len: {}",
-                    round_trip.len(), s.len()
+                    round_trip.len(),
+                    s.len()
                 ));
             }
         }
@@ -613,7 +612,8 @@ mod tests {
             if round_trip != s {
                 return Err(format!(
                     "large string readable JSON round-trip mismatch\n  actual len: {}\n  expected len: {}",
-                    round_trip.len(), s.len()
+                    round_trip.len(),
+                    s.len()
                 ));
             }
         }
@@ -635,7 +635,8 @@ mod tests {
             if round_trip != s {
                 return Err(format!(
                     "large string bytes round-trip mismatch\n  actual len: {}\n  expected len: {}",
-                    round_trip.len(), s.len()
+                    round_trip.len(),
+                    s.len()
                 ));
             }
         }
@@ -643,7 +644,9 @@ mod tests {
         Ok(())
     }
 
-    fn verify_reserialize_large_array(input: &Assertion_ReserializeLargeArray) -> Result<(), String> {
+    fn verify_reserialize_large_array(
+        input: &Assertion_ReserializeLargeArray,
+    ) -> Result<(), String> {
         let n = input.num_items as usize;
         let array: Vec<i32> = vec![1_i32; n];
         let ser = Serializer::array(Serializer::int32());
@@ -723,12 +726,9 @@ mod tests {
         for (i, unit_test) in unit_tests.iter().enumerate() {
             let expected_number = first_number + i as i32;
             assert_eq!(
-                unit_test.test_number,
-                expected_number,
+                unit_test.test_number, expected_number,
                 "Test numbers are not sequential at test #{}: found {}, expected {}",
-                i,
-                unit_test.test_number,
-                expected_number
+                i, unit_test.test_number, expected_number
             );
         }
 

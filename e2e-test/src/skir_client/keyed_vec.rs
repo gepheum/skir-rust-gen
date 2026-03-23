@@ -74,7 +74,8 @@ impl<S: KeyedVecSpec> KeyedVec<S> {
             }
             map
         });
-        <S::Lookup as internal::Lookup<S::StorageKey>>::find_index(index, key).map(|i| &self.items[i])
+        <S::Lookup as internal::Lookup<S::StorageKey>>::find_index(index, key)
+            .map(|i| &self.items[i])
     }
 }
 
@@ -182,7 +183,10 @@ pub mod internal {
         /// The key type accepted by [`super::KeyedVec::find_by_key`].
         type Key<'a>;
         #[doc(hidden)]
-        fn find_index<'a>(index: &HashMap<StorageKey, usize>, query: Self::Key<'a>) -> Option<usize>;
+        fn find_index<'a>(
+            index: &HashMap<StorageKey, usize>,
+            query: Self::Key<'a>,
+        ) -> Option<usize>;
     }
 
     impl<K: Eq + Hash + Copy> Lookup<K> for CopyLookup {
@@ -230,9 +234,18 @@ mod tests {
 
     fn make_vec() -> KeyedVec<ItemById> {
         KeyedVec::new(vec![
-            Item { id: 1, name: "one".to_owned() },
-            Item { id: 2, name: "two".to_owned() },
-            Item { id: 3, name: "three".to_owned() },
+            Item {
+                id: 1,
+                name: "one".to_owned(),
+            },
+            Item {
+                id: 2,
+                name: "two".to_owned(),
+            },
+            Item {
+                id: 3,
+                name: "three".to_owned(),
+            },
         ])
     }
 
@@ -240,27 +253,37 @@ mod tests {
 
     #[test]
     fn search_existing_key_returns_element() {
-        let kv = make_vec();        let found = kv.find_by_key(2).expect("key 2 should be present");
+        let kv = make_vec();
+        let found = kv.find_by_key(2).expect("key 2 should be present");
         assert_eq!(found.name, "two");
     }
 
     #[test]
     fn search_missing_key_returns_none() {
-        let kv = make_vec();        assert!(kv.find_by_key(99).is_none());
+        let kv = make_vec();
+        assert!(kv.find_by_key(99).is_none());
     }
 
     #[test]
     fn search_duplicate_key_returns_first_occurrence() {
         let kv: KeyedVec<ItemById> = KeyedVec::new(vec![
-            Item { id: 42, name: "first".to_owned() },
-            Item { id: 42, name: "second".to_owned() },
-        ]);        let found = kv.find_by_key(42).expect("key 42 should be present");
+            Item {
+                id: 42,
+                name: "first".to_owned(),
+            },
+            Item {
+                id: 42,
+                name: "second".to_owned(),
+            },
+        ]);
+        let found = kv.find_by_key(42).expect("key 42 should be present");
         assert_eq!(found.name, "first");
     }
 
     #[test]
     fn search_empty_vec_returns_none() {
-        let kv: KeyedVec<ItemById> = KeyedVec::new(vec![]);        assert!(kv.find_by_key(1).is_none());
+        let kv: KeyedVec<ItemById> = KeyedVec::new(vec![]);
+        assert!(kv.find_by_key(1).is_none());
     }
 
     // Index is built once; calling find_by_key() a second time still works.
@@ -340,8 +363,14 @@ mod tests {
     #[test]
     fn string_key_found_with_str_slice() {
         let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![
-            Item { id: 1, name: "alice".to_owned() },
-            Item { id: 2, name: "bob".to_owned() },
+            Item {
+                id: 1,
+                name: "alice".to_owned(),
+            },
+            Item {
+                id: 2,
+                name: "bob".to_owned(),
+            },
         ]);
         // &str works directly because String: Borrow<str> — no allocation at call site
         let found = kv.find_by_key("bob").expect("bob should be present");
@@ -350,17 +379,24 @@ mod tests {
 
     #[test]
     fn string_key_missing_returns_none() {
-        let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![
-            Item { id: 1, name: "alice".to_owned() },
-        ]);
+        let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![Item {
+            id: 1,
+            name: "alice".to_owned(),
+        }]);
         assert!(kv.find_by_key("carol").is_none());
     }
 
     #[test]
     fn string_key_found_with_owned_string() {
         let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![
-            Item { id: 1, name: "alice".to_owned() },
-            Item { id: 2, name: "bob".to_owned() },
+            Item {
+                id: 1,
+                name: "alice".to_owned(),
+            },
+            Item {
+                id: 2,
+                name: "bob".to_owned(),
+            },
         ]);
         let name = String::from("bob");
         // Pass &name (i.e. &String, which coerces to &str) to satisfy QueryKey<'_> = &str.
@@ -370,9 +406,10 @@ mod tests {
 
     #[test]
     fn string_key_missing_with_owned_string() {
-        let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![
-            Item { id: 1, name: "alice".to_owned() },
-        ]);
+        let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![Item {
+            id: 1,
+            name: "alice".to_owned(),
+        }]);
         let name = String::from("carol");
         assert!(kv.find_by_key(&name).is_none());
     }
@@ -397,8 +434,14 @@ mod tests {
     #[test]
     fn find_or_default_string_key_returns_item_when_found() {
         let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![
-            Item { id: 1, name: "alice".to_owned() },
-            Item { id: 2, name: "bob".to_owned() },
+            Item {
+                id: 1,
+                name: "alice".to_owned(),
+            },
+            Item {
+                id: 2,
+                name: "bob".to_owned(),
+            },
         ]);
         let item = kv.find_by_key_or_default("bob");
         assert_eq!(item.id, 2);
@@ -406,12 +449,12 @@ mod tests {
 
     #[test]
     fn find_or_default_string_key_returns_default_when_missing() {
-        let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![
-            Item { id: 1, name: "alice".to_owned() },
-        ]);
+        let kv: KeyedVec<ItemByName> = KeyedVec::new(vec![Item {
+            id: 1,
+            name: "alice".to_owned(),
+        }]);
         let item = kv.find_by_key_or_default("carol");
         assert_eq!(item.id, 0);
         assert_eq!(item.name, "");
     }
 }
-

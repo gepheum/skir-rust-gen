@@ -75,7 +75,7 @@ class RustSourceFileGenerator {
       // Home: https://github.com/gepheum/skir-rust-gen
       //
       // To install the Skir client library, run:
-      //   cargo add skir-rust-client
+      //   cargo add skir-client
       `,
     );
 

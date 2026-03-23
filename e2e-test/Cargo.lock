@@ -73,10 +73,8 @@ name = "e2e_test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "serde_json",
- "thiserror",
+ "skir-client",
  "tokio",
- "ureq",
 ]
 
 [[package]]
@@ -505,6 +503,18 @@ name = "simd-adler32"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
+
+[[package]]
+name = "skir-client"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed7a06e32212a68a7332ca488cf56679428f62c3ad12f245a23160b811df58f3"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "thiserror",
+ "ureq",
+]
 
 [[package]]
 name = "smallvec"

@@ -18,9 +18,9 @@ pub use keyed_vec::KeyedVec;
 pub use keyed_vec::KeyedVecSpec;
 
 // serializer
+pub use serializer::DeserializeError;
 pub use serializer::JsonFlavor;
 pub use serializer::Serializer;
-pub use serializer::DeserializeError;
 pub use serializer::UnrecognizedValues;
 
 // method

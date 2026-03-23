@@ -482,9 +482,7 @@ where
                                 source: None,
                             };
                             return Box::pin(async move { Err(anyhow::Error::from(err)) })
-                                as Pin<
-                                    Box<dyn Future<Output = anyhow::Result<String>> + Send>,
-                                >;
+                                as Pin<Box<dyn Future<Output = anyhow::Result<String>> + Send>>;
                         }
                     };
                     let fut = impl_fn(req, meta);

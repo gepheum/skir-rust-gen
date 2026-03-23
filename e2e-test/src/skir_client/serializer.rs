@@ -16,6 +16,12 @@ impl<T: 'static> Clone for Serializer<T> {
     }
 }
 
+impl<T: 'static> std::fmt::Debug for Serializer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Serializer").finish_non_exhaustive()
+    }
+}
+
 impl<T: 'static> Serializer<T> {
     /// Serialises `v` to a JSON string.
     ///

@@ -1,4 +1,5 @@
 pub mod keyed_vec;
+pub mod method;
 pub mod reflection;
 pub mod serializer;
 pub mod serializers;
@@ -16,6 +17,9 @@ pub use keyed_vec::KeyedVecSpec;
 
 // serializer
 pub use serializer::Serializer;
+
+// method
+pub use method::Method;
 
 // serializers
 pub use serializers::array_serializer;

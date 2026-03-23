@@ -1,6 +1,5 @@
 // Golden tests...
-// TODO: methods
-// TODO: constants
+// TODO: why do we have an Arc in StructAdapter and EnumAdapter? Can we get rid of it?
 // TODO: format rust code
 // TODO: if I have a recursive fiedld, Equal() is not working...
 //   TODO: I think I may want to create my own Rec<>...
@@ -489,7 +488,41 @@ class RustSourceFileGenerator {
     this.push("}\n\n");
   }
 
-  private writeMethod(method: Method): void {}
+  private writeMethod(method: Method): void {
+    const { typeSpeller } = this;
+    const rustName = convertCase(method.name.text, "lower_underscore").concat(
+      "_method",
+    );
+    const requestRustType = typeSpeller.getRustType(method.requestType!);
+    const responseRustType = typeSpeller.getRustType(method.responseType!);
+    const requestSerializerExpr = typeSpeller.getSerializerExpression(
+      method.requestType!,
+      null,
+    );
+    const responseSerializerExpr = typeSpeller.getSerializerExpression(
+      method.responseType!,
+      null,
+    );
+    const nameStr = toRustStringLiteral(method.name.text);
+    const docStr = toRustStringLiteral(docToCommentText(method.doc));
+    this.push(commentify(docToCommentText(method.doc)));
+    this.push(
+      `pub fn ${rustName}() -> &'static crate::skir_client::Method<${requestRustType}, ${responseRustType}> {\n`,
+    );
+    this.push(
+      `static METHOD: std::sync::LazyLock<crate::skir_client::Method<${requestRustType}, ${responseRustType}>> = std::sync::LazyLock::new(|| {\n`,
+    );
+    this.push(`crate::skir_client::Method {\n`);
+    this.push(`name: ${nameStr}.to_string(),\n`);
+    this.push(`number: ${method.number}_i64,\n`);
+    this.push(`request_serializer: ${requestSerializerExpr},\n`);
+    this.push(`response_serializer: ${responseSerializerExpr},\n`);
+    this.push(`doc: ${docStr}.to_string(),\n`);
+    this.push("}\n");
+    this.push("});\n");
+    this.push("&*METHOD\n");
+    this.push("}\n\n");
+  }
 
   private writeConstant(constant: Constant): void {
     const { typeSpeller } = this;

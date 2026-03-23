@@ -1,11 +1,7 @@
-// TODO: structured error message in response?
-// TODO: should Serializer::type_descriptor return a reference?
-// TODO: anyhow::Error in service?
-// TODO: right error for decoding...
-// TODO: TypeDescriptor construction should use serde.json
+
 // TODO: if I have a recursive fiedld, Equal() is not working...
 //   TODO: I think I may want to create my own Rec<>...
-// TODO: SkirRPC
+// TODO: upload client lib
 // TODO: CI
 
 import {

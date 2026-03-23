@@ -506,299 +506,169 @@ impl std::fmt::Debug for EnumDescriptor {
 // =============================================================================
 
 fn type_descriptor_to_json(td: &TypeDescriptor) -> String {
-    let mut order: Vec<String> = Vec::new();
-    let mut record_id_to_json: HashMap<String, String> = HashMap::new();
-
-    add_record_definitions(td, &mut order, &mut record_id_to_json);
-
-    let mut out = String::new();
-    out.push_str("{\n  \"type\": ");
-    type_signature_to_json(td, "  ", &mut out);
-    out.push_str(",\n  \"records\": [");
-    for (i, id) in order.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        out.push_str("\n    ");
-        out.push_str(&record_id_to_json[id]);
-    }
-    if !order.is_empty() {
-        out.push_str("\n  ");
-    }
-    out.push_str("]\n}");
-    out
+    let records = collect_record_values(td);
+    let mut root = serde_json::Map::new();
+    root.insert("type".into(), type_signature_to_value(td));
+    root.insert("records".into(), records.into());
+    serde_json::to_string_pretty(&serde_json::Value::Object(root)).unwrap()
 }
 
-fn add_record_definitions(
+fn collect_record_values(td: &TypeDescriptor) -> Vec<serde_json::Value> {
+    let mut order: Vec<String> = Vec::new();
+    let mut record_id_to_value: HashMap<String, serde_json::Value> = HashMap::new();
+    add_record_values(td, &mut order, &mut record_id_to_value);
+    order
+        .into_iter()
+        .map(|id| record_id_to_value.remove(&id).unwrap())
+        .collect()
+}
+
+fn add_record_values(
     td: &TypeDescriptor,
     order: &mut Vec<String>,
-    record_id_to_json: &mut HashMap<String, String>,
+    record_id_to_value: &mut HashMap<String, serde_json::Value>,
 ) {
     match td {
         TypeDescriptor::Primitive(_) => {}
         TypeDescriptor::Optional(inner) => {
-            add_record_definitions(inner, order, record_id_to_json);
+            add_record_values(inner, order, record_id_to_value);
         }
         TypeDescriptor::Array(arr) => {
-            add_record_definitions(&arr.item_type, order, record_id_to_json);
+            add_record_values(&arr.item_type, order, record_id_to_value);
         }
         TypeDescriptor::Struct(s) => {
             let rid = s.record_id();
-            if record_id_to_json.contains_key(&rid) {
-                return; // already visited (or in-progress – cycle guard)
+            if record_id_to_value.contains_key(&rid) {
+                return; // cycle guard
             }
-            record_id_to_json.insert(rid.clone(), String::new()); // cycle guard
-            let mut sb = String::new();
-            write_struct_record_json(s, "    ", &mut sb);
-            record_id_to_json.insert(rid.clone(), sb);
+            record_id_to_value.insert(rid.clone(), serde_json::Value::Null); // placeholder
+            let value = struct_record_to_value(s);
+            *record_id_to_value.get_mut(&rid).unwrap() = value;
             order.push(rid);
             for f in s.fields() {
-                add_record_definitions(&f.field_type, order, record_id_to_json);
+                add_record_values(&f.field_type, order, record_id_to_value);
             }
         }
         TypeDescriptor::Enum(e) => {
             let rid = e.record_id();
-            if record_id_to_json.contains_key(&rid) {
-                return;
+            if record_id_to_value.contains_key(&rid) {
+                return; // cycle guard
             }
-            record_id_to_json.insert(rid.clone(), String::new()); // cycle guard
-            let mut sb = String::new();
-            write_enum_record_json(e, "    ", &mut sb);
-            record_id_to_json.insert(rid.clone(), sb);
+            record_id_to_value.insert(rid.clone(), serde_json::Value::Null); // placeholder
+            let value = enum_record_to_value(e);
+            *record_id_to_value.get_mut(&rid).unwrap() = value;
             order.push(rid);
             for v in e.variants() {
                 if let EnumVariant::Wrapper(w) = v {
-                    add_record_definitions(&w.variant_type, order, record_id_to_json);
+                    add_record_values(&w.variant_type, order, record_id_to_value);
                 }
             }
         }
     }
 }
 
-fn write_struct_record_json(s: &StructDescriptor, indent: &str, out: &mut String) {
-    let inner = format!("{}  ", indent);
-    let field_indent = format!("{}  ", inner);
-    let field_body = format!("{}  ", field_indent);
+fn struct_record_to_value(s: &StructDescriptor) -> serde_json::Value {
+    let fields: Vec<serde_json::Value> = s
+        .fields()
+        .iter()
+        .map(|f| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), f.name.clone().into());
+            obj.insert("number".into(), f.number.into());
+            obj.insert("type".into(), type_signature_to_value(&f.field_type));
+            if !f.doc.is_empty() {
+                obj.insert("doc".into(), f.doc.clone().into());
+            }
+            serde_json::Value::Object(obj)
+        })
+        .collect();
 
-    out.push_str("{\n");
-    out.push_str(&inner);
-    out.push_str("\"kind\": \"struct\",\n");
-    out.push_str(&inner);
-    out.push_str("\"id\": ");
-    out.push_str(&json_string(&s.record_id()));
+    let mut obj = serde_json::Map::new();
+    obj.insert("kind".into(), "struct".into());
+    obj.insert("id".into(), s.record_id().into());
     if !s.doc.is_empty() {
-        out.push_str(",\n");
-        out.push_str(&inner);
-        out.push_str("\"doc\": ");
-        out.push_str(&json_string(&s.doc));
+        obj.insert("doc".into(), s.doc.clone().into());
     }
-    out.push_str(",\n");
-    out.push_str(&inner);
-    out.push_str("\"fields\": [");
-    let fields = s.fields();
-    for (i, f) in fields.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        out.push('\n');
-        out.push_str(&field_indent);
-        out.push_str("{\n");
-        out.push_str(&field_body);
-        out.push_str("\"name\": ");
-        out.push_str(&json_string(&f.name));
-        out.push_str(",\n");
-        out.push_str(&field_body);
-        out.push_str("\"number\": ");
-        out.push_str(&f.number.to_string());
-        out.push_str(",\n");
-        out.push_str(&field_body);
-        out.push_str("\"type\": ");
-        type_signature_to_json(&f.field_type, &field_body, out);
-        if !f.doc.is_empty() {
-            out.push_str(",\n");
-            out.push_str(&field_body);
-            out.push_str("\"doc\": ");
-            out.push_str(&json_string(&f.doc));
-        }
-        out.push('\n');
-        out.push_str(&field_indent);
-        out.push('}');
-    }
-    if !fields.is_empty() {
-        out.push('\n');
-        out.push_str(&inner);
-    }
-    out.push(']');
+    obj.insert("fields".into(), fields.into());
     let removed = removed_numbers_to_sorted_slice(s.removed_numbers());
     if !removed.is_empty() {
-        out.push_str(",\n");
-        out.push_str(&inner);
-        out.push_str("\"removed_numbers\": [");
-        for (i, n) in removed.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            out.push('\n');
-            out.push_str(&field_indent);
-            out.push_str(&n.to_string());
-        }
-        out.push('\n');
-        out.push_str(&inner);
-        out.push(']');
+        let removed_json: Vec<serde_json::Value> = removed.iter().map(|&n| n.into()).collect();
+        obj.insert("removed_numbers".into(), removed_json.into());
     }
-    out.push('\n');
-    out.push_str(indent);
-    out.push('}');
+    serde_json::Value::Object(obj)
 }
 
-fn write_enum_record_json(e: &EnumDescriptor, indent: &str, out: &mut String) {
-    let inner = format!("{}  ", indent);
-    let variant_indent = format!("{}  ", inner);
-    let variant_body = format!("{}  ", variant_indent);
-
-    out.push_str("{\n");
-    out.push_str(&inner);
-    out.push_str("\"kind\": \"enum\",\n");
-    out.push_str(&inner);
-    out.push_str("\"id\": ");
-    out.push_str(&json_string(&e.record_id()));
-    if !e.doc.is_empty() {
-        out.push_str(",\n");
-        out.push_str(&inner);
-        out.push_str("\"doc\": ");
-        out.push_str(&json_string(&e.doc));
-    }
-    out.push_str(",\n");
-    out.push_str(&inner);
-    out.push_str("\"variants\": [");
-    // Sort by number for deterministic output.
+fn enum_record_to_value(e: &EnumDescriptor) -> serde_json::Value {
     let mut sorted: Vec<&EnumVariant> = e.variants().iter().collect();
     sorted.sort_by_key(|v| v.number());
-    for (i, v) in sorted.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        out.push('\n');
-        out.push_str(&variant_indent);
-        out.push_str("{\n");
-        out.push_str(&variant_body);
-        out.push_str("\"name\": ");
-        out.push_str(&json_string(v.name()));
-        out.push_str(",\n");
-        out.push_str(&variant_body);
-        out.push_str("\"number\": ");
-        out.push_str(&v.number().to_string());
-        if let EnumVariant::Wrapper(w) = v {
-            out.push_str(",\n");
-            out.push_str(&variant_body);
-            out.push_str("\"type\": ");
-            type_signature_to_json(&w.variant_type, &variant_body, out);
-        }
-        if !v.doc().is_empty() {
-            out.push_str(",\n");
-            out.push_str(&variant_body);
-            out.push_str("\"doc\": ");
-            out.push_str(&json_string(v.doc()));
-        }
-        out.push('\n');
-        out.push_str(&variant_indent);
-        out.push('}');
+
+    let variants: Vec<serde_json::Value> = sorted
+        .iter()
+        .map(|v| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("name".into(), v.name().to_string().into());
+            obj.insert("number".into(), v.number().into());
+            if let EnumVariant::Wrapper(w) = v {
+                obj.insert("type".into(), type_signature_to_value(&w.variant_type));
+            }
+            if !v.doc().is_empty() {
+                obj.insert("doc".into(), v.doc().to_string().into());
+            }
+            serde_json::Value::Object(obj)
+        })
+        .collect();
+
+    let mut obj = serde_json::Map::new();
+    obj.insert("kind".into(), "enum".into());
+    obj.insert("id".into(), e.record_id().into());
+    if !e.doc.is_empty() {
+        obj.insert("doc".into(), e.doc.clone().into());
     }
-    if !sorted.is_empty() {
-        out.push('\n');
-        out.push_str(&inner);
-    }
-    out.push(']');
+    obj.insert("variants".into(), variants.into());
     let removed = removed_numbers_to_sorted_slice(e.removed_numbers());
     if !removed.is_empty() {
-        out.push_str(",\n");
-        out.push_str(&inner);
-        out.push_str("\"removed_numbers\": [");
-        for (i, n) in removed.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            out.push('\n');
-            out.push_str(&variant_indent);
-            out.push_str(&n.to_string());
-        }
-        out.push('\n');
-        out.push_str(&inner);
-        out.push(']');
+        let removed_json: Vec<serde_json::Value> = removed.iter().map(|&n| n.into()).collect();
+        obj.insert("removed_numbers".into(), removed_json.into());
     }
-    out.push('\n');
-    out.push_str(indent);
-    out.push('}');
+    serde_json::Value::Object(obj)
 }
 
-fn type_signature_to_json(td: &TypeDescriptor, indent: &str, out: &mut String) {
-    let inner = format!("{}  ", indent);
+fn type_signature_to_value(td: &TypeDescriptor) -> serde_json::Value {
     match td {
         TypeDescriptor::Primitive(p) => {
-            out.push_str("{\n");
-            out.push_str(&inner);
-            out.push_str("\"kind\": \"primitive\",\n");
-            out.push_str(&inner);
-            out.push_str("\"value\": \"");
-            out.push_str(p.as_str());
-            out.push_str("\"\n");
-            out.push_str(indent);
-            out.push('}');
+            let mut obj = serde_json::Map::new();
+            obj.insert("kind".into(), "primitive".into());
+            obj.insert("value".into(), p.as_str().into());
+            serde_json::Value::Object(obj)
         }
-        TypeDescriptor::Optional(other) => {
-            out.push_str("{\n");
-            out.push_str(&inner);
-            out.push_str("\"kind\": \"optional\",\n");
-            out.push_str(&inner);
-            out.push_str("\"value\": ");
-            type_signature_to_json(other, &inner, out);
-            out.push('\n');
-            out.push_str(indent);
-            out.push('}');
+        TypeDescriptor::Optional(inner) => {
+            let mut obj = serde_json::Map::new();
+            obj.insert("kind".into(), "optional".into());
+            obj.insert("value".into(), type_signature_to_value(inner));
+            serde_json::Value::Object(obj)
         }
         TypeDescriptor::Array(arr) => {
-            let value_indent = format!("{}  ", inner);
-            out.push_str("{\n");
-            out.push_str(&inner);
-            out.push_str("\"kind\": \"array\",\n");
-            out.push_str(&inner);
-            out.push_str("\"value\": {\n");
-            out.push_str(&value_indent);
-            out.push_str("\"item\": ");
-            type_signature_to_json(&arr.item_type, &value_indent, out);
+            let mut value_obj = serde_json::Map::new();
+            value_obj.insert("item".into(), type_signature_to_value(&arr.item_type));
             if !arr.key_extractor.is_empty() {
-                out.push_str(",\n");
-                out.push_str(&value_indent);
-                out.push_str("\"key_extractor\": ");
-                out.push_str(&json_string(&arr.key_extractor));
+                value_obj.insert("key_extractor".into(), arr.key_extractor.clone().into());
             }
-            out.push('\n');
-            out.push_str(&inner);
-            out.push_str("}\n");
-            out.push_str(indent);
-            out.push('}');
+            let mut obj = serde_json::Map::new();
+            obj.insert("kind".into(), "array".into());
+            obj.insert("value".into(), serde_json::Value::Object(value_obj));
+            serde_json::Value::Object(obj)
         }
         TypeDescriptor::Struct(s) => {
-            out.push_str("{\n");
-            out.push_str(&inner);
-            out.push_str("\"kind\": \"record\",\n");
-            out.push_str(&inner);
-            out.push_str("\"value\": ");
-            out.push_str(&json_string(&s.record_id()));
-            out.push('\n');
-            out.push_str(indent);
-            out.push('}');
+            let mut obj = serde_json::Map::new();
+            obj.insert("kind".into(), "record".into());
+            obj.insert("value".into(), s.record_id().into());
+            serde_json::Value::Object(obj)
         }
         TypeDescriptor::Enum(e) => {
-            out.push_str("{\n");
-            out.push_str(&inner);
-            out.push_str("\"kind\": \"record\",\n");
-            out.push_str(&inner);
-            out.push_str("\"value\": ");
-            out.push_str(&json_string(&e.record_id()));
-            out.push('\n');
-            out.push_str(indent);
-            out.push('}');
+            let mut obj = serde_json::Map::new();
+            obj.insert("kind".into(), "record".into());
+            obj.insert("value".into(), e.record_id().into());
+            serde_json::Value::Object(obj)
         }
     }
 }
@@ -807,10 +677,6 @@ fn removed_numbers_to_sorted_slice(set: &HashSet<i32>) -> Vec<i32> {
     let mut v: Vec<i32> = set.iter().copied().collect();
     v.sort_unstable();
     v
-}
-
-fn json_string(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
 }
 
 // =============================================================================

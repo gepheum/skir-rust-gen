@@ -229,8 +229,12 @@ where
             })
             .collect();
 
-        let result = serde_json::json!({ "methods": methods });
-        RawResponse::ok_json(serde_json::to_string_pretty(&result).unwrap_or_else(|_| "{}".into()))
+        let mut result = serde_json::Map::new();
+        result.insert("methods".into(), methods.into());
+        RawResponse::ok_json(
+            serde_json::to_string_pretty(&serde_json::Value::Object(result))
+                .unwrap_or_else(|_| "{}".into()),
+        )
     }
 
     async fn handle_json_request(&self, body: &str, meta: Meta) -> RawResponse {

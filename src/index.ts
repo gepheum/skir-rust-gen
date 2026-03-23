@@ -251,9 +251,7 @@ class RustSourceFileGenerator {
     this.push(`"${structModulePath}",\n`);
     this.push(`"${structQualifiedName}",\n`);
     this.push(`"",\n`);
-    this.push(
-      `|x: &${typeName}| x._unrecognized.as_ref().map(|b| b.as_ref()),\n`,
-    );
+    this.push(`|x: &${typeName}| &x._unrecognized,\n`);
     this.push(`|x: &mut ${typeName}, u| x._unrecognized = u,\n`);
     this.push(`)\n`);
     this.push(`});\n`);

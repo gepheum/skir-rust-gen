@@ -6,7 +6,7 @@ use std::sync::Arc;
 use super::super::reflection::{StructDescriptor, StructField, TypeDescriptor};
 use super::super::serializer::{Serializer, TypeAdapter};
 use super::super::serializers::{decode_number, encode_uint32, read_u8, skip_value, write_json_escaped_string};
-use super::super::unrecognized::internal::{UnrecognizedFieldsData, UnrecognizedFormat};
+use super::super::unrecognized::internal::{UnrecognizedFields, UnrecognizedFieldsData, UnrecognizedFormat};
 
 // =============================================================================
 // FieldEntry – type-erased per-field adapter
@@ -102,7 +102,7 @@ impl<T: 'static, V: 'static> FieldEntry<T> for TypedField<T, V> {
 /// [`StructAdapter::add_removed_number`] for each field, then
 /// [`StructAdapter::finalize`] to finish.
 pub struct StructAdapter<T: 'static + Default> {
-    get_unrecognized: fn(&T) -> Option<&UnrecognizedFieldsData<T>>,
+    get_unrecognized: fn(&T) -> &Option<UnrecognizedFields<T>>,
     set_unrecognized: fn(&mut T, Option<Box<UnrecognizedFieldsData<T>>>),
     ordered_entries: Vec<Box<dyn FieldEntry<T>>>,
     /// name → index in ordered_entries (built in finalize after sort)
@@ -125,7 +125,7 @@ impl<T: 'static + Default> StructAdapter<T> {
         module_path: &str,
         qualified_name: &str,
         doc: &str,
-        get_unrecognized: fn(&T) -> Option<&UnrecognizedFieldsData<T>>,
+        get_unrecognized: fn(&T) -> &Option<UnrecognizedFields<T>>,
         set_unrecognized: fn(&mut T, Option<Box<UnrecognizedFieldsData<T>>>),
     ) -> Self {
         // Pre-allocate the descriptor with an empty fields set so that
@@ -249,7 +249,7 @@ impl<T: 'static + Default> StructAdapter<T> {
         let unrecognized = (self.get_unrecognized)(input);
         out.push('[');
 
-        if let Some(u) = unrecognized {
+        if let Some(u) = unrecognized.as_deref() {
             if u.format == UnrecognizedFormat::DenseJson && !u.values.is_empty() {
                 // Write all recognized slots, then append stored unrecognized elements.
                 let recognized_count = self.slot_to_index.len();
@@ -404,7 +404,7 @@ impl<T: 'static + Default> StructAdapter<T> {
     fn encode_impl(&self, input: &T, out: &mut Vec<u8>) {
         let unrecognized = (self.get_unrecognized)(input);
         let (total_slot_count, recognized_slot_count, unrecognized_bytes) =
-            if let Some(u) = unrecognized {
+            if let Some(u) = unrecognized.as_deref() {
                 if u.format == UnrecognizedFormat::Bytes && !u.values.is_empty() {
                     (
                         u.array_len as usize,
@@ -565,7 +565,7 @@ mod tests {
     use crate::skir_client::reflection::TypeDescriptor;
     use crate::skir_client::serializer::Serializer;
     use crate::skir_client::serializers::{int32_serializer, string_serializer};
-    use crate::skir_client::unrecognized::internal::UnrecognizedFieldsData;
+    use crate::skir_client::unrecognized::internal::{UnrecognizedFields, UnrecognizedFieldsData};
 
     // -------------------------------------------------------------------------
     // A minimal two-field struct for testing
@@ -586,8 +586,8 @@ mod tests {
         }
     }
 
-    fn get_unrecognized(t: &Point) -> Option<&UnrecognizedFieldsData<Point>> {
-        t._unrecognized.as_deref()
+    fn get_unrecognized(t: &Point) -> &Option<UnrecognizedFields<Point>> {
+        &t._unrecognized
     }
 
     fn set_unrecognized(t: &mut Point, u: Option<Box<UnrecognizedFieldsData<Point>>>) {
@@ -840,8 +840,8 @@ mod tests {
         _unrecognized: Option<Box<UnrecognizedFieldsData<Named>>>,
     }
 
-    fn named_get_unrecognized(t: &Named) -> Option<&UnrecognizedFieldsData<Named>> {
-        t._unrecognized.as_deref()
+    fn named_get_unrecognized(t: &Named) -> &Option<UnrecognizedFields<Named>> {
+        &t._unrecognized
     }
     fn named_set_unrecognized(t: &mut Named, u: Option<Box<UnrecognizedFieldsData<Named>>>) {
         t._unrecognized = u;

@@ -1,4 +1,3 @@
-// My serializer should probably not take boolean for keep_unrecognized_fields...
 // TODO: why do we have an Arc in StructAdapter and EnumAdapter? Can we get rid of it?
 // TODO: format rust code
 // TODO: expose the serializers as static factory functions of Serializer... (Serializer::int32())?

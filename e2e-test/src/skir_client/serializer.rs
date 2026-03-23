@@ -4,12 +4,23 @@ use super::reflection::TypeDescriptor;
 // JsonFlavor
 // =============================================================================
 
-/// Controls the JSON output format produced by [`Serializer::to_json`].
+/// When serializing a value to JSON, you can choose one of two flavors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JsonFlavor {
-    /// Compact output with no extra whitespace.
+    /// Structs are serialized as JSON arrays, where the field numbers in the
+    /// index definition match the indexes in the array. Enum constants are
+    /// serialized as numbers.
+    ///
+    /// This is the serialization format you should choose in most cases. It is
+    /// also the default.
     Dense,
-    /// Human-readable output with newlines and indentation.
+    /// Structs are serialized as JSON objects, and enum constants are
+    /// serialized as strings.
+    ///
+    /// This format is more verbose and readable, but it should not be used if
+    /// you need persistence, because skir allows fields to be renamed in record
+    /// definitions. In other words, never store a readable JSON on disk or in a
+    /// database.
     Readable,
 }
 
@@ -17,14 +28,25 @@ pub enum JsonFlavor {
 // UnrecognizedValuesPolicy
 // =============================================================================
 
-/// Controls whether unrecognized fields/variants are preserved during
-/// deserialization.
+/// What to do with unrecognized fields when deserializing a value from dense
+/// JSON or binary data.
+///
+/// Pick [`Keep`][UnrecognizedValues::Keep] if the input JSON or binary string
+/// comes from a trusted program which might have been built from more recent
+/// source files. Always pick [`Drop`][UnrecognizedValues::Drop] if the input
+/// JSON or binary string might come from a malicious user.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnrecognizedValues {
-    /// Preserve unrecognized fields and variants (forward-compatibility mode).
-    Keep,
-    /// Discard unrecognized fields and variants.
+    /// Unrecognized fields found when deserializing a value are dropped.
+    ///
+    /// Pick this option if the input JSON or binary string might come from a
+    /// malicious user.
     Drop,
+    /// Unrecognized fields found when deserializing a value from dense JSON or
+    /// binary data are saved. If the value is later re-serialized in the same
+    /// format (dense JSON or binary), the unrecognized fields will be present
+    /// in the serialized form.
+    Keep,
 }
 
 // =============================================================================
@@ -51,9 +73,6 @@ impl<T: 'static> std::fmt::Debug for Serializer<T> {
 
 impl<T: 'static> Serializer<T> {
     /// Serialises `v` to a JSON string.
-    ///
-    /// Pass [`JsonFlavor::Readable`] for human-readable (indented) output;
-    /// [`JsonFlavor::Dense`] produces compact JSON.
     pub fn to_json(&self, v: &T, flavor: JsonFlavor) -> String {
         let mut out = String::new();
         match flavor {
@@ -64,9 +83,6 @@ impl<T: 'static> Serializer<T> {
     }
 
     /// Deserialises a JSON string into a value of type `T`.
-    ///
-    /// Use [`UnrecognizedValuesPolicy::KeepUnrecognized`] to preserve
-    /// fields/variants from a newer schema version.
     pub fn from_json(
         &self,
         code: &str,
@@ -90,9 +106,6 @@ impl<T: 'static> Serializer<T> {
     ///
     /// If `bytes` lacks the `"skir"` prefix the payload is treated as a UTF-8
     /// JSON string and parsed via [`Self::from_json`].
-    ///
-    /// Use [`UnrecognizedValuesPolicy::KeepUnrecognized`] to preserve
-    /// fields/variants from a newer schema version.
     pub fn from_bytes(
         &self,
         bytes: &[u8],
@@ -131,7 +144,6 @@ impl<T: 'static> Serializer<T> {
     pub(super) fn adapter(&self) -> &dyn TypeAdapter<T> {
         self.adapter.get()
     }
-
 }
 
 /// Owned or `'static`-borrowed reference to a `dyn TypeAdapter<T>`.

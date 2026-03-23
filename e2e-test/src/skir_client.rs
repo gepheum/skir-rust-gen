@@ -4,6 +4,8 @@ pub mod method;
 pub mod reflection;
 pub mod serializer;
 pub mod serializers;
+pub mod service;
+pub mod service_client;
 pub mod struct_adapter;
 pub mod unrecognized;
 
@@ -29,6 +31,18 @@ pub use reflection::TypeDescriptor;
 // unrecognized
 pub use unrecognized::UnrecognizedFields;
 pub use unrecognized::UnrecognizedVariant;
+
+// service
+pub use service::HttpErrorCode;
+pub use service::MethodErrorInfo;
+pub use service::RawResponse;
+pub use service::Service;
+pub use service::ServiceBuilder;
+pub use service::ServiceError;
+
+// service_client
+pub use service_client::RpcError;
+pub use service_client::ServiceClient;
 
 /// Items from the `internal` modules of sub-modules, re-exported as a single
 /// top-level `internal` module.

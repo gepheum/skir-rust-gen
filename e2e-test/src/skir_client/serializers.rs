@@ -1219,7 +1219,7 @@ impl<S: KeyedVecSpec + 'static> TypeAdapter<KeyedVec<S>> for KeyedArrayAdapter<S
     fn type_descriptor(&self) -> TypeDescriptor {
         TypeDescriptor::Array(Box::new(ArrayDescriptor::new(
             self.item.adapter().type_descriptor(),
-            String::new(),
+            S::key_extractor().to_string(),
         )))
     }
 
@@ -2406,6 +2406,9 @@ mod tests {
         type Lookup = super::super::keyed_vec::internal::CopyLookup;
         fn get_key(item: &i32) -> i32 {
             *item
+        }
+        fn key_extractor() -> &'static str {
+            ""
         }
         fn default_item() -> &'static i32 {
             static D: i32 = 0;

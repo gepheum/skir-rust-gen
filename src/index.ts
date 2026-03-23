@@ -229,6 +229,9 @@ class RustSourceFileGenerator {
       this.push(`fn get_key(item: &${typeName}) -> ${keySpec.rustKeyType} {\n`);
       this.push(`  ${keySpec.rustKeyExpr}\n`);
       this.push("}\n");
+      this.push(`fn key_extractor() -> &'static str {\n`);
+      this.push(`  "${keySpec.keyExtractor}"\n`);
+      this.push("}\n");
       this.push(`fn default_item() -> &'static ${typeName} {\n`);
       this.push(`  ${typeName}::default_ref()\n`);
       this.push("}\n");

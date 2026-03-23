@@ -16,6 +16,8 @@ pub trait KeyedVecSpec {
     type Lookup: internal::Lookup<Self::StorageKey>;
 
     fn get_key(item: &Self::Item) -> Self::StorageKey;
+    /// Returns the dot-separated key path used in type descriptors.
+    fn key_extractor() -> &'static str;
     /// Returns a `'static` reference to the default item, used by
     /// [`KeyedVec::find_by_key_or_default`] when no matching element is found.
     fn default_item() -> &'static Self::Item;
@@ -217,6 +219,9 @@ mod tests {
         fn get_key(item: &Item) -> u32 {
             item.id
         }
+        fn key_extractor() -> &'static str {
+            ""
+        }
         fn default_item() -> &'static Item {
             static DEFAULT: std::sync::LazyLock<Item> = std::sync::LazyLock::new(Item::default);
             &DEFAULT
@@ -322,6 +327,9 @@ mod tests {
         type Lookup = internal::BorrowLookup;
         fn get_key(item: &Item) -> String {
             item.name.clone()
+        }
+        fn key_extractor() -> &'static str {
+            ""
         }
         fn default_item() -> &'static Item {
             static DEFAULT: std::sync::LazyLock<Item> = std::sync::LazyLock::new(Item::default);

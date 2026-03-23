@@ -18,6 +18,8 @@ export interface KeySpec {
   readonly rustKeyType: string;
   /** For example "item.id". */
   readonly rustKeyExpr: string;
+  /** For example "id" or "sub_item.weekday.kind". */
+  readonly keyExtractor: string;
   readonly lookupImpl: "CopyLookup" | "BorrowLookup";
 }
 
@@ -82,6 +84,7 @@ export class KeyedArrayContext {
               )
               .join("."),
           );
+          const keyExtractorParts = fieldPath.path.map((p) => p.name.text);
           if (fieldPath.keyType.kind === "record") {
             rustKeyType = rustKeyType.concat("_kind");
             // ".kind" -> ".kind()"
@@ -93,6 +96,7 @@ export class KeyedArrayContext {
             rustSpecName: rustSpecName,
             rustKeyType: rustKeyType,
             rustKeyExpr: rustKeyExpr,
+            keyExtractor: keyExtractorParts.join("."),
             lookupImpl: keyTypeIsString ? "BorrowLookup" : "CopyLookup",
           };
         })

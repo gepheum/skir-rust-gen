@@ -1076,16 +1076,18 @@ impl<T: 'static> TypeAdapter<Vec<T>> for ArrayAdapter<T> {
         }
     }
 
-    // empty → wire 246; else → wire 247 + encode_uint32(count) + items.
+    // 0 items → wire 246; 1-3 items → wire 247-249 (no length follows);
+    // 4+ items → wire 250 + encode_uint32(count).
     fn encode(&self, input: &Vec<T>, out: &mut Vec<u8>) {
-        if input.is_empty() {
-            out.push(246);
+        let n = input.len();
+        if n <= 3 {
+            out.push(246 + n as u8);
         } else {
-            out.push(247);
-            encode_uint32(input.len() as u32, out);
-            for item in input {
-                self.item.adapter().encode(item, out);
-            }
+            out.push(250);
+            encode_uint32(n as u32, out);
+        }
+        for item in input {
+            self.item.adapter().encode(item, out);
         }
     }
 
@@ -1098,7 +1100,11 @@ impl<T: 'static> TypeAdapter<Vec<T>> for ArrayAdapter<T> {
         if wire == 0 || wire == 246 {
             return Ok(vec![]);
         }
-        let n = decode_number(input)? as usize;
+        let n = if wire == 250 {
+            decode_number(input)? as usize
+        } else {
+            (wire - 246) as usize
+        };
         let mut items = Vec::with_capacity(n);
         for _ in 0..n {
             items.push(self.item.adapter().decode(input, keep_unrecognized_values)?);
@@ -1174,16 +1180,18 @@ impl<S: KeyedVecSpec + 'static> TypeAdapter<KeyedVec<S>> for KeyedArrayAdapter<S
         }
     }
 
-    // empty → wire 246; else → wire 247 + encode_uint32(count) + items.
+    // 0 items → wire 246; 1-3 items → wire 247-249 (no length follows);
+    // 4+ items → wire 250 + encode_uint32(count).
     fn encode(&self, input: &KeyedVec<S>, out: &mut Vec<u8>) {
-        if input.is_empty() {
-            out.push(246);
+        let n = input.len();
+        if n <= 3 {
+            out.push(246 + n as u8);
         } else {
-            out.push(247);
-            encode_uint32(input.len() as u32, out);
-            for item in input.iter() {
-                self.item.adapter().encode(item, out);
-            }
+            out.push(250);
+            encode_uint32(n as u32, out);
+        }
+        for item in input.iter() {
+            self.item.adapter().encode(item, out);
         }
     }
 
@@ -1196,7 +1204,11 @@ impl<S: KeyedVecSpec + 'static> TypeAdapter<KeyedVec<S>> for KeyedArrayAdapter<S
         if wire == 0 || wire == 246 {
             return Ok(KeyedVec::default());
         }
-        let n = decode_number(input)? as usize;
+        let n = if wire == 250 {
+            decode_number(input)? as usize
+        } else {
+            (wire - 246) as usize
+        };
         let mut items = Vec::with_capacity(n);
         for _ in 0..n {
             items.push(self.item.adapter().decode(input, keep_unrecognized_values)?);

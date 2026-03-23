@@ -21,6 +21,9 @@ pub use serializer::Serializer;
 // method
 pub use method::Method;
 
+// reflection (exposed for tests)
+pub use reflection::TypeDescriptor;
+
 // serializers
 pub use serializers::array_serializer;
 pub use serializers::bool_serializer;

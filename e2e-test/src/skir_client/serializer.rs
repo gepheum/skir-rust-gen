@@ -1,6 +1,28 @@
 use super::reflection::TypeDescriptor;
 
 // =============================================================================
+// DeserializeError
+// =============================================================================
+
+/// Error returned by [`Serializer::from_json`] and [`Serializer::from_bytes`].
+#[derive(Debug, thiserror::Error)]
+pub enum DeserializeError {
+    /// The input is not valid JSON.
+    #[error("invalid JSON: {0}")]
+    InvalidJson(#[from] serde_json::Error),
+    /// The JSON is valid but does not match the expected schema.
+    #[error("{0}")]
+    Schema(String),
+}
+
+/// Allows `?` to be used in functions that return `Result<_, String>`.
+impl From<DeserializeError> for String {
+    fn from(e: DeserializeError) -> String {
+        e.to_string()
+    }
+}
+
+// =============================================================================
 // JsonFlavor
 // =============================================================================
 
@@ -85,11 +107,12 @@ impl<T: 'static> Serializer<T> {
     }
 
     /// Deserialises a JSON string into a value of type `T`.
-    pub fn from_json(&self, code: &str, policy: UnrecognizedValues) -> Result<T, String> {
-        let fv: serde_json::Value = serde_json::from_str(code).map_err(|e| e.to_string())?;
+    pub fn from_json(&self, code: &str, policy: UnrecognizedValues) -> Result<T, DeserializeError> {
+        let fv: serde_json::Value = serde_json::from_str(code).map_err(DeserializeError::InvalidJson)?;
         self.adapter
             .get()
             .from_json(&fv, policy == UnrecognizedValues::Keep)
+            .map_err(DeserializeError::Schema)
     }
 
     /// Serialises `v` to the Skir binary wire format.
@@ -105,13 +128,14 @@ impl<T: 'static> Serializer<T> {
     ///
     /// If `bytes` lacks the `"skir"` prefix the payload is treated as a UTF-8
     /// JSON string and parsed via [`Self::from_json`].
-    pub fn from_bytes(&self, bytes: &[u8], policy: UnrecognizedValues) -> Result<T, String> {
+    pub fn from_bytes(&self, bytes: &[u8], policy: UnrecognizedValues) -> Result<T, DeserializeError> {
         let keep = policy == UnrecognizedValues::Keep;
         if bytes.starts_with(b"skir") {
             let mut rest = &bytes[4..];
-            self.adapter.get().decode(&mut rest, keep)
+            self.adapter.get().decode(&mut rest, keep).map_err(DeserializeError::Schema)
         } else {
-            let s = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+            let s = std::str::from_utf8(bytes)
+                .map_err(|e| DeserializeError::Schema(e.to_string()))?;
             self.from_json(s, policy)
         }
     }

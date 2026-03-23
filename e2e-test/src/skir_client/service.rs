@@ -114,64 +114,32 @@ impl HttpErrorCode {
     }
 }
 
+impl std::fmt::Display for HttpErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_u16())
+    }
+}
+
 // =============================================================================
 // ServiceError
 // =============================================================================
 
-/// Return this from a method implementation to control the HTTP response sent
-/// to the client on error.
-#[derive(Debug)]
-pub enum ServiceError {
-    /// An unspecified internal error. Results in a 500 response; the message
-    /// can optionally be forwarded to the client via
-    /// [`ServiceBuilder::set_can_send_unknown_error_message`].
-    Unknown(Box<dyn std::error::Error + Send + Sync + 'static>),
-    /// An error with a specific HTTP status code and message sent to the
-    /// client. Optionally wraps a source error for error-chain logging.
-    Http {
-        /// The HTTP status code to send (e.g. 400, 403, 404, 500).
-        status_code: HttpErrorCode,
-        /// The message to send to the client.
-        message: String,
-        /// An optional underlying cause, available via [`Self::source_error`].
-        /// Not sent to the client.
-        source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    },
-}
-
-impl ServiceError {
-    /// Returns the source error, if any.
-    ///
-    /// For [`ServiceError::Unknown`] this is always `Some`. For
-    /// [`ServiceError::Http`] it is `Some` only when a source was provided.
-    pub fn source_error(&self) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
-        match self {
-            ServiceError::Unknown(e) => Some(e.as_ref()),
-            ServiceError::Http { source, .. } => source.as_deref(),
-        }
-    }
-}
-
-impl std::fmt::Display for ServiceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ServiceError::Unknown(_) => write!(f, "unknown service error"),
-            ServiceError::Http {
-                status_code,
-                message,
-                ..
-            } => {
-                write!(f, "service error ({}): {}", status_code.as_u16(), message)
-            }
-        }
-    }
-}
-
-impl std::error::Error for ServiceError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source_error()
-            .map(|e| e as &(dyn std::error::Error + 'static))
-    }
+/// Return this from a method implementation (via [`anyhow::Error`]) to control
+/// the HTTP response sent to the client on error.
+///
+/// Any other error type propagated through `anyhow` results in a 500 response;
+/// the message is optionally forwarded to the client via
+/// [`ServiceBuilder::set_can_send_unknown_error_message`].
+#[derive(Debug, thiserror::Error)]
+#[error("service error ({status_code}): {message}")]
+pub struct ServiceError {
+    /// The HTTP status code to send (e.g. 400, 403, 404, 500).
+    pub status_code: HttpErrorCode,
+    /// The message to send to the client.
+    pub message: String,
+    /// An optional underlying cause, not sent to the client.
+    #[source]
+    pub source: Option<anyhow::Error>,
 }
 
 // =============================================================================
@@ -180,8 +148,9 @@ impl std::error::Error for ServiceError {
 
 /// Context passed to the error logger when a method returns an error.
 pub struct MethodErrorInfo<'a, Meta> {
-    /// The error returned by the method.
-    pub error: &'a ServiceError,
+    /// The error returned by the method. Downcast to [`ServiceError`] to
+    /// distinguish HTTP errors from unknown internal errors.
+    pub error: anyhow::Error,
     /// The name of the method that failed.
     pub method_name: &'a str,
     /// The raw JSON of the request that caused the error.
@@ -389,34 +358,27 @@ where
             Ok(response_json) => RawResponse::ok_json(response_json),
             Err(e) => {
                 let info = MethodErrorInfo {
-                    error: &e,
+                    error: e,
                     method_name: &entry.name,
                     raw_request: &raw_request,
                     request_meta: &meta,
                 };
                 (self.error_logger)(&info);
 
-                match &e {
-                    ServiceError::Http {
-                        status_code,
-                        message,
-                        ..
-                    } => {
-                        let msg = if message.is_empty() {
-                            http_status_text(status_code.as_u16()).to_owned()
-                        } else {
-                            message.clone()
-                        };
-                        RawResponse::server_error(msg, status_code.as_u16())
-                    }
-                    ServiceError::Unknown(inner) => {
-                        let msg = if (self.can_send_unknown_error_message)(&info) {
-                            format!("server error: {}", inner)
-                        } else {
-                            "server error".to_owned()
-                        };
-                        RawResponse::server_error(msg, 500)
-                    }
+                if let Some(svc) = info.error.downcast_ref::<ServiceError>() {
+                    let msg = if svc.message.is_empty() {
+                        http_status_text(svc.status_code.as_u16()).to_owned()
+                    } else {
+                        svc.message.clone()
+                    };
+                    RawResponse::server_error(msg, svc.status_code.as_u16())
+                } else {
+                    let msg = if (self.can_send_unknown_error_message)(&info) {
+                        format!("server error: {}", info.error)
+                    } else {
+                        "server error".to_owned()
+                    };
+                    RawResponse::server_error(msg, 500)
                 }
             }
         }
@@ -474,7 +436,9 @@ where
     /// Registers the implementation of a method.
     ///
     /// The closure receives the deserialized request and the per-request
-    /// metadata, and must return either the response or a [`ServiceError`].
+    /// metadata, and must return an [`anyhow::Result`]. Return a [`ServiceError`]
+    /// to send a specific HTTP status code and message to the client; any other
+    /// error type results in a 500 response treated as an unknown internal error.
     ///
     /// Returns an error if a method with the same number has already been
     /// registered.
@@ -486,7 +450,7 @@ where
     where
         Req: 'static,
         Resp: 'static,
-        Fut: Future<Output = Result<Resp, ServiceError>> + Send + 'static,
+        Fut: Future<Output = anyhow::Result<Resp>> + Send + 'static,
     {
         if self.by_num.contains_key(&method.number) {
             return Err(format!(
@@ -512,14 +476,14 @@ where
                     let req = match req_serializer.from_json(&request_json, policy) {
                         Ok(r) => r,
                         Err(e) => {
-                            let err = ServiceError::Http {
+                            let err = ServiceError {
                                 status_code: HttpErrorCode::_400_BadRequest,
                                 message: format!("bad request: can't parse JSON: {e}"),
                                 source: None,
                             };
-                            return Box::pin(async move { Err(err) })
+                            return Box::pin(async move { Err(anyhow::Error::from(err)) })
                                 as Pin<
-                                    Box<dyn Future<Output = Result<String, ServiceError>> + Send>,
+                                    Box<dyn Future<Output = anyhow::Result<String>> + Send>,
                                 >;
                         }
                     };
@@ -534,7 +498,7 @@ where
                         };
                         Ok(resp_serializer.to_json(&resp, flavor))
                     })
-                        as Pin<Box<dyn Future<Output = Result<String, ServiceError>> + Send>>
+                        as Pin<Box<dyn Future<Output = anyhow::Result<String>> + Send>>
                 },
             ),
         };
@@ -554,7 +518,7 @@ where
         self
     }
 
-    /// Whether the message of a [`ServiceError::Unknown`] error can be
+    /// Whether the message of an unknown (non-[`ServiceError`]) error can be
     /// sent to the client in the response body.
     ///
     /// Defaults to `false` to avoid leaking sensitive information.
@@ -563,7 +527,7 @@ where
         self
     }
 
-    /// Per-invocation predicate for whether to expose unknown error messages.
+    /// Per-invocation predicate for whether to expose unknown (non-[`ServiceError`]) error messages.
     pub fn set_can_send_unknown_error_message_fn(
         mut self,
         f: impl for<'a> Fn(&MethodErrorInfo<'a, Meta>) -> bool + Send + Sync + 'static,
@@ -624,7 +588,7 @@ struct MethodEntry<Meta> {
                 bool,
                 bool,
                 Meta,
-            ) -> Pin<Box<dyn Future<Output = Result<String, ServiceError>> + Send>>
+            ) -> Pin<Box<dyn Future<Output = anyhow::Result<String>> + Send>>
             + Send
             + Sync,
     >,

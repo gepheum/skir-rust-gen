@@ -61,11 +61,11 @@ async fn main() {
                 let store = store_for_add.clone();
                 async move {
                     if req.user.name.is_empty() {
-                        return Err(ServiceError::Http {
+                        return Err(anyhow::Error::from(ServiceError {
                             status_code: HttpErrorCode::_400_BadRequest,
                             message: "user name must not be empty".into(),
                             source: None,
-                        });
+                        }));
                     }
                     let mut store = store.lock().unwrap();
                     let user_id = req.user.user_id;

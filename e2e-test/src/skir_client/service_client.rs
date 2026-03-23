@@ -7,7 +7,8 @@ use super::serializer::{JsonFlavor, UnrecognizedValues};
 
 /// Error returned by [`ServiceClient::invoke_remote`] when the server responds
 /// with a non-2xx status code or when a network-level failure occurs.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("rpc error {status_code}: {message}")]
 pub struct RpcError {
     /// The HTTP status code returned by the server, or `0` for network-level
     /// failures (e.g. DNS error, connection refused, timeout).
@@ -15,18 +16,6 @@ pub struct RpcError {
     /// A human-readable description of the error.
     pub message: String,
 }
-
-impl std::fmt::Display for RpcError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.status_code != 0 {
-            write!(f, "rpc error {}: {}", self.status_code, self.message)
-        } else {
-            write!(f, "rpc error: {}", self.message)
-        }
-    }
-}
-
-impl std::error::Error for RpcError {}
 
 // =============================================================================
 // ServiceClient

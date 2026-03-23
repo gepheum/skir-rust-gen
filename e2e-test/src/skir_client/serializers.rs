@@ -2383,9 +2383,9 @@ mod tests {
 
     #[test]
     fn array_encode_nonempty() {
-        // wire 247 + count 3 + items [1, 2, 3] (each a single-byte int32)
+        // wire 249 (246 + 3 items, no length byte) + items [1, 2, 3]
         let bytes = array_serializer(int32_serializer()).to_bytes(&vec![1_i32, 2, 3]);
-        assert_eq!(&bytes[4..], &[0xf7_u8, 3, 1, 2, 3]);
+        assert_eq!(&bytes[4..], &[0xf9_u8, 1, 2, 3]);
     }
 
     #[test]
@@ -2461,8 +2461,8 @@ mod tests {
     fn keyed_array_encode_nonempty() {
         let s = keyed_array_serializer::<I32Spec>(int32_serializer());
         let bytes = s.to_bytes(&i32_keyed_vec(vec![5, 6]));
-        // wire 247 + count 2 + items [5, 6]
-        assert_eq!(&bytes[4..], &[0xf7_u8, 2, 5, 6]);
+        // wire 248 (246 + 2 items, no length byte) + items [5, 6]
+        assert_eq!(&bytes[4..], &[0xf8_u8, 5, 6]);
     }
 
     #[test]

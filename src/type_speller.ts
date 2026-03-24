@@ -14,17 +14,24 @@ export class TypeSpeller {
     readonly namer: Namer,
   ) {}
 
-  getRustType(type: ResolvedType): string {
+  getRustType(
+    type: ResolvedType,
+    fieldRecursivity?: false | "soft" | "via-optional" | "hard",
+  ): string {
     switch (type.kind) {
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
         const className = getTypeName(recordLocation);
+        let recordType: string;
         if (recordLocation.modulePath === this.namer.skirModule?.path) {
-          return className;
+          recordType = className;
         } else {
           const rustPathPrefix = toRustPathPrefix(recordLocation.modulePath);
-          return `${rustPathPrefix}::${className}`;
+          recordType = `${rustPathPrefix}::${className}`;
         }
+        return fieldRecursivity === "hard"
+          ? `${this.namer.option}<${this.namer.box}<${recordType}>>`
+          : recordType;
       }
       case "array": {
         const itemType = this.getRustType(type.item);
@@ -36,7 +43,10 @@ export class TypeSpeller {
         }
       }
       case "optional": {
-        const otherType = this.getRustType(type.other);
+        let otherType = this.getRustType(type.other);
+        if (fieldRecursivity === "via-optional") {
+          otherType = `${this.namer.box}<${otherType}>`;
+        }
         return `${this.namer.option}<${otherType}>`;
       }
       case "primitive": {
@@ -112,7 +122,11 @@ export class TypeSpeller {
     return getTypeName(record);
   }
 
-  getSerializerExpression(type: ResolvedType, context: "init" | null): string {
+  getSerializerExpression(
+    type: ResolvedType,
+    context: "init" | null,
+    fieldRecursivity?: false | "soft" | "via-optional" | "hard",
+  ): string {
     switch (type.kind) {
       case "primitive": {
         switch (type.primitive) {
@@ -153,11 +167,16 @@ export class TypeSpeller {
           type.other,
           context,
         );
-        return `crate::skir_client::Serializer::optional(${otherSerializer})`;
+        if (fieldRecursivity === "via-optional") {
+          return `crate::skir_client::internal::option_box_serializer(${otherSerializer})`;
+        } else {
+          return `crate::skir_client::Serializer::optional(${otherSerializer})`;
+        }
       }
       case "record": {
         const recordLocation = this.recordMap.get(type.key)!;
         const rustType = this.getRustType(type);
+        let serializerExpr: string;
         if (
           context === "init" &&
           recordLocation.modulePath === this.namer.skirModule?.path
@@ -166,10 +185,13 @@ export class TypeSpeller {
             recordLocation.record.recordType === "struct"
               ? "struct_serializer_from_static"
               : "enum_serializer_from_static";
-          return `crate::skir_client::internal::${fnName}(${rustType}::_adapter())`;
+          serializerExpr = `crate::skir_client::internal::${fnName}(${rustType}::_adapter())`;
         } else {
-          return rustType.concat("::serializer()");
+          serializerExpr = rustType.concat("::serializer()");
         }
+        return fieldRecursivity === "hard"
+          ? `crate::skir_client::internal::recursive_serializer(${serializerExpr})`
+          : serializerExpr;
       }
     }
   }

@@ -129,7 +129,10 @@ class RustSourceFileGenerator {
     );
     const typeName = getTypeName(struct);
     const allFieldsUseRustDefault = struct.record.fields.every(
-      (f) => f.isRecursive === "hard" || skirDefaultIsRustDefault(f.type!),
+      (f) =>
+        f.isRecursive === "hard" ||
+        f.isRecursive === "via-optional" ||
+        skirDefaultIsRustDefault(f.type!),
     );
     const deriveList = allFieldsUseRustDefault
       ? `${namer.clone}, ${namer.debug}, ${namer.partialEq}, ${namer.default}`
@@ -138,22 +141,21 @@ class RustSourceFileGenerator {
     this.push(`#[derive(${deriveList})]\n`);
     this.push(`pub struct ${typeName} {\n`);
     for (const field of struct.record.fields) {
-      const fieldType = typeSpeller.getRustType(field.type!);
+      const fieldType = typeSpeller.getRustType(field.type!, field.isRecursive);
       const fieldName = toRustFieldName(field.name.text);
       if (field.isRecursive === "hard") {
         const recFieldName = `_${field.name.text}_rec`;
-        const boxedType = `${namer.option}<${namer.box}<${fieldType}>>`;
         this.push(
           commentify([
             docToCommentText(field.doc),
-            "Recursive field. Noxed and optional to avoid infinite size.",
-            "None is equivalent to the default value.",
+            "Recursive field. Boxed and optional to avoid infinite size.",
+            "None should be treated the same as the default struct value.",
             `Use \`${fieldName}()\` to read this field without having to handle the Option,`,
             "but be careful not to call it from a recursive function as it may cause",
             "infinite recursion.",
           ]),
         );
-        this.push(`pub ${recFieldName}: ${boxedType},\n`);
+        this.push(`pub ${recFieldName}: ${fieldType},\n`);
       } else {
         this.push(commentify(docToCommentText(field.doc)));
         this.push(`pub ${fieldName}: ${fieldType},\n`);
@@ -420,13 +422,11 @@ class RustSourceFileGenerator {
         }
         for (const field of record.record.fields) {
           const fieldName = toRustFieldName(field.name.text);
-          let serializerExpr = typeSpeller.getSerializerExpression(
+          const serializerExpr = typeSpeller.getSerializerExpression(
             field.type!,
             "init",
+            field.isRecursive,
           );
-          if (field.isRecursive === "hard") {
-            serializerExpr = `crate::skir_client::internal::recursive_serializer(${serializerExpr})`;
-          }
           const getter =
             field.isRecursive === "hard"
               ? `|x: &${typeName}| &x._${field.name.text}_rec`

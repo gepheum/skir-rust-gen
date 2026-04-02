@@ -333,13 +333,13 @@ let not_found_or_default = user_registry.users.find_by_key_or_default(999_i32);
 println!("{}", not_found_or_default.pets.len()); // 0
 ```
 
-### Skir services
+### SkirRPC services
 
-#### Starting a Skir service on an HTTP server
+#### Starting a SkirRPC service on an HTTP server
 
 Full example [here](https://github.com/gepheum/skir-rust-example/blob/main/src/bin/start_service.rs).
 
-#### Sending RPCs to a Skir service
+#### Sending RPCs to a SkirRPC service
 
 Full example [here](https://github.com/gepheum/skir-rust-example/blob/main/src/bin/call_service.rs).
 

@@ -7,10 +7,12 @@ mod tests {
     use crate::skir_client::{JsonFlavor, Serializer, UnrecognizedValues};
     use crate::skirout::base::external::gepheum::skir_golden_tests::goldens::unit_tests_const;
     use crate::skirout::base::external::gepheum::skir_golden_tests::goldens::{
-        Assertion, Assertion_BytesEqual, Assertion_BytesIn, Assertion_ReserializeLargeArray,
+        Assertion, Assertion_BytesEqual, Assertion_BytesIn, Assertion_EnumAFromBytesIsConstant,
+        Assertion_EnumAFromJsonIsConstant, Assertion_EnumBFromBytesIsWrapperB,
+        Assertion_EnumBFromJsonIsWrapperB, Assertion_ReserializeLargeArray,
         Assertion_ReserializeLargeString, Assertion_ReserializeValue, Assertion_StringEqual,
-        Assertion_StringIn, BytesExpression, Color, KeyedArrays, MyEnum, Point, RecEnum, RecStruct,
-        StringExpression, TypedValue,
+        Assertion_StringIn, BytesExpression, Color, EnumA, EnumB, KeyedArrays, MyEnum, Point,
+        RecEnum, RecStruct, StringExpression, TypedValue,
     };
 
     // =========================================================================
@@ -150,6 +152,8 @@ mod tests {
             TypedValue::Point(v) => Ok(ev((**v).clone(), Point::serializer())),
             TypedValue::Color(v) => Ok(ev((**v).clone(), Color::serializer())),
             TypedValue::MyEnum(v) => Ok(ev((**v).clone(), MyEnum::serializer())),
+            TypedValue::EnumA(v) => Ok(ev((**v).clone(), EnumA::serializer())),
+            TypedValue::EnumB(v) => Ok(ev((**v).clone(), EnumB::serializer())),
             TypedValue::KeyedArrays(v) => Ok(ev((**v).clone(), KeyedArrays::serializer())),
             TypedValue::RecStruct(v) => Ok(ev((**v).clone(), RecStruct::serializer())),
             TypedValue::RecEnum(v) => Ok(ev((**v).clone(), RecEnum::serializer())),
@@ -252,6 +256,62 @@ mod tests {
                     .map_err(|e| format!("MyEnumFromBytesDropUnrecognized: {}", e))?;
                 Ok(ev(value, MyEnum::serializer()))
             }
+            TypedValue::EnumAFromJsonKeepUnrecognized(expr) => {
+                let json = evaluate_string(expr)?;
+                let value = EnumA::serializer()
+                    .from_json(&json, UnrecognizedValues::Keep)
+                    .map_err(|e| format!("EnumAFromJsonKeepUnrecognized: {}", e))?;
+                Ok(ev(value, EnumA::serializer()))
+            }
+            TypedValue::EnumAFromJsonDropUnrecognized(expr) => {
+                let json = evaluate_string(expr)?;
+                let value = EnumA::serializer()
+                    .from_json(&json, UnrecognizedValues::Drop)
+                    .map_err(|e| format!("EnumAFromJsonDropUnrecognized: {}", e))?;
+                Ok(ev(value, EnumA::serializer()))
+            }
+            TypedValue::EnumAFromBytesKeepUnrecognized(expr) => {
+                let bytes = evaluate_bytes(expr)?;
+                let value = EnumA::serializer()
+                    .from_bytes(&bytes, UnrecognizedValues::Keep)
+                    .map_err(|e| format!("EnumAFromBytesKeepUnrecognized: {}", e))?;
+                Ok(ev(value, EnumA::serializer()))
+            }
+            TypedValue::EnumAFromBytesDropUnrecognized(expr) => {
+                let bytes = evaluate_bytes(expr)?;
+                let value = EnumA::serializer()
+                    .from_bytes(&bytes, UnrecognizedValues::Drop)
+                    .map_err(|e| format!("EnumAFromBytesDropUnrecognized: {}", e))?;
+                Ok(ev(value, EnumA::serializer()))
+            }
+            TypedValue::EnumBFromJsonKeepUnrecognized(expr) => {
+                let json = evaluate_string(expr)?;
+                let value = EnumB::serializer()
+                    .from_json(&json, UnrecognizedValues::Keep)
+                    .map_err(|e| format!("EnumBFromJsonKeepUnrecognized: {}", e))?;
+                Ok(ev(value, EnumB::serializer()))
+            }
+            TypedValue::EnumBFromJsonDropUnrecognized(expr) => {
+                let json = evaluate_string(expr)?;
+                let value = EnumB::serializer()
+                    .from_json(&json, UnrecognizedValues::Drop)
+                    .map_err(|e| format!("EnumBFromJsonDropUnrecognized: {}", e))?;
+                Ok(ev(value, EnumB::serializer()))
+            }
+            TypedValue::EnumBFromBytesKeepUnrecognized(expr) => {
+                let bytes = evaluate_bytes(expr)?;
+                let value = EnumB::serializer()
+                    .from_bytes(&bytes, UnrecognizedValues::Keep)
+                    .map_err(|e| format!("EnumBFromBytesKeepUnrecognized: {}", e))?;
+                Ok(ev(value, EnumB::serializer()))
+            }
+            TypedValue::EnumBFromBytesDropUnrecognized(expr) => {
+                let bytes = evaluate_bytes(expr)?;
+                let value = EnumB::serializer()
+                    .from_bytes(&bytes, UnrecognizedValues::Drop)
+                    .map_err(|e| format!("EnumBFromBytesDropUnrecognized: {}", e))?;
+                Ok(ev(value, EnumB::serializer()))
+            }
             TypedValue::Unknown(_) => Err("unknown TypedValue variant".to_string()),
         }
     }
@@ -269,7 +329,104 @@ mod tests {
             Assertion::ReserializeValue(a) => verify_reserialize_value(a),
             Assertion::ReserializeLargeString(a) => verify_reserialize_large_string(a),
             Assertion::ReserializeLargeArray(a) => verify_reserialize_large_array(a),
+            Assertion::EnumAFromJsonIsConstant(a) => verify_enum_a_from_json_is_constant(a),
+            Assertion::EnumAFromBytesIsConstant(a) => verify_enum_a_from_bytes_is_constant(a),
+            Assertion::EnumBFromJsonIsWrapperB(a) => verify_enum_b_from_json_is_wrapper_b(a),
+            Assertion::EnumBFromBytesIsWrapperB(a) => verify_enum_b_from_bytes_is_wrapper_b(a),
             Assertion::Unknown(_) => Err("unknown Assertion variant".to_string()),
+        }
+    }
+
+    fn verify_enum_a_from_json_is_constant(
+        a: &Assertion_EnumAFromJsonIsConstant,
+    ) -> Result<(), String> {
+        let actual = evaluate_string(&a.actual)?;
+        let value = EnumA::serializer()
+            .from_json(
+                &actual,
+                if a.keep_unrecognized {
+                    UnrecognizedValues::Keep
+                } else {
+                    UnrecognizedValues::Drop
+                },
+            )
+            .map_err(|e| format!("enum_a_from_json_is_constant parse error: {}", e))?;
+        if !matches!(value, EnumA::A) {
+            return Err(format!(
+                "enum_a_from_json_is_constant mismatch\n  actual json: {:?}\n  expected: EnumA::A",
+                actual
+            ));
+        }
+        Ok(())
+    }
+
+    fn verify_enum_a_from_bytes_is_constant(
+        a: &Assertion_EnumAFromBytesIsConstant,
+    ) -> Result<(), String> {
+        let actual = evaluate_bytes(&a.actual)?;
+        let value = EnumA::serializer()
+            .from_bytes(
+                &actual,
+                if a.keep_unrecognized {
+                    UnrecognizedValues::Keep
+                } else {
+                    UnrecognizedValues::Drop
+                },
+            )
+            .map_err(|e| format!("enum_a_from_bytes_is_constant parse error: {}", e))?;
+        if !matches!(value, EnumA::A) {
+            return Err(format!(
+                "enum_a_from_bytes_is_constant mismatch\n  actual bytes: hex:{}\n  expected: EnumA::A",
+                to_hex(&actual)
+            ));
+        }
+        Ok(())
+    }
+
+    fn verify_enum_b_from_json_is_wrapper_b(
+        a: &Assertion_EnumBFromJsonIsWrapperB,
+    ) -> Result<(), String> {
+        let actual = evaluate_string(&a.actual)?;
+        let value = EnumB::serializer()
+            .from_json(
+                &actual,
+                if a.keep_unrecognized {
+                    UnrecognizedValues::Keep
+                } else {
+                    UnrecognizedValues::Drop
+                },
+            )
+            .map_err(|e| format!("enum_b_from_json_is_wrapper_b parse error: {}", e))?;
+        match value {
+            EnumB::B(v) if v == a.expected => Ok(()),
+            _ => Err(format!(
+                "enum_b_from_json_is_wrapper_b mismatch\n  actual json: {:?}\n  expected: EnumB::B({:?})",
+                actual, a.expected
+            )),
+        }
+    }
+
+    fn verify_enum_b_from_bytes_is_wrapper_b(
+        a: &Assertion_EnumBFromBytesIsWrapperB,
+    ) -> Result<(), String> {
+        let actual = evaluate_bytes(&a.actual)?;
+        let value = EnumB::serializer()
+            .from_bytes(
+                &actual,
+                if a.keep_unrecognized {
+                    UnrecognizedValues::Keep
+                } else {
+                    UnrecognizedValues::Drop
+                },
+            )
+            .map_err(|e| format!("enum_b_from_bytes_is_wrapper_b parse error: {}", e))?;
+        match value {
+            EnumB::B(v) if v == a.expected => Ok(()),
+            _ => Err(format!(
+                "enum_b_from_bytes_is_wrapper_b mismatch\n  actual bytes: hex:{}\n  expected: EnumB::B({:?})",
+                to_hex(&actual),
+                a.expected
+            )),
         }
     }
 

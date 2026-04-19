@@ -478,8 +478,9 @@ class RustSourceFileGenerator {
               `(*a).add_wrapper_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, ${serializerExpr}, ${toRustStringLiteral(docToCommentText(variant.doc))}, ${wrapFn}, ${getValueFn});\n`,
             );
           } else {
+            const skirName = convertCase(variant.name.text, "UPPER_UNDERSCORE");
             this.push(
-              `(*a).add_constant_variant("${variant.name.text}", ${variant.number}, ${kindOrdinal}, ${toRustStringLiteral(docToCommentText(variant.doc))}, ${typeName}::${variantName});\n`,
+              `(*a).add_constant_variant("${skirName}", ${variant.number}, ${kindOrdinal}, ${toRustStringLiteral(docToCommentText(variant.doc))}, ${typeName}::${variantName});\n`,
             );
           }
           kindOrdinal++;

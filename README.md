@@ -123,9 +123,9 @@ variant is added automatically and is the default.
 The definition of the `SubscriptionStatus` enum in the .skir file is:
 ```rust
 enum SubscriptionStatus {
-  FREE;
+  free;
   trial: Trial;
-  PREMIUM;
+  premium;
 }
 ```
 

@@ -15,9 +15,9 @@ struct User {
 }
 
 enum SubscriptionStatus {
-  FREE;
+  free;
   trial: Trial;
-  PREMIUM;
+  premium;
 
   struct Trial {
     start_time: timestamp;

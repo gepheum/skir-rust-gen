@@ -1,4 +1,10 @@
-import { Module, type RecordLocation } from "skir-internal";
+import {
+  convertCase,
+  type Field,
+  type Method,
+  Module,
+  type RecordLocation,
+} from "skir-internal";
 
 export class Namer {
   constructor(readonly skirModule: Module | null) {}
@@ -37,6 +43,34 @@ export function getTypeName(record: RecordLocation): string {
   return record.recordAncestors
     .map((r) => maybeEscapeUpperCasedName(r.name.text))
     .join("_");
+}
+
+/** Returns the name of the generated method descriptor function. */
+export function getMethodName(method: Method): string {
+  return convertCase(method.name.text, "lower_underscore").concat("_method");
+}
+
+/** Returns the name of the Rust variant generated for the given enum variant. */
+export function getVariantName(record: RecordLocation, variant: Field): string {
+  return convertCase(variant.name.text, "UpperCamel").concat(
+    doVariantNamesNeedSuffix(record.record.fields)
+      ? variant.type
+        ? "Wrapper"
+        : "Const"
+      : "",
+  );
+}
+
+function doVariantNamesNeedSuffix(variants: readonly Field[]): boolean {
+  const seenNames = new Set<string>();
+  for (const variant of variants) {
+    const name = convertCase(variant.name.text, "UpperCamel");
+    if (isUpperCasedKeyword(name) || seenNames.has(name)) {
+      return true;
+    }
+    seenNames.add(name);
+  }
+  return false;
 }
 
 export function toStructFieldName(input: string): string {

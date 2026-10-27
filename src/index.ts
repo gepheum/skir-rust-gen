@@ -3,7 +3,6 @@ import {
   type Constant,
   convertCase,
   type Doc,
-  type Field,
   type Method,
   type RecordKey,
   type RecordLocation,
@@ -12,10 +11,12 @@ import {
 import { z } from "zod";
 import { KeyedArrayContext } from "./keyed_array_context.js";
 import {
+  getMethodName,
   getTypeName,
-  isUpperCasedKeyword,
+  getVariantName,
   Namer,
   toStructFieldName as toRustFieldName,
+  toRustPathPrefix,
 } from "./naming.js";
 import { collectRustModuleSpecs, RustModuleSpec } from "./rust_module_spec.js";
 import { skirDefaultIsRustDefault, TypeSpeller } from "./type_speller.js";
@@ -42,6 +43,48 @@ class RustCodeGenerator implements CodeGenerator<Config> {
       ).generate(),
     }));
     return { files: outputFiles };
+  }
+
+  symbols(_input: CodeGenerator.Input<Config>): CodeGenerator.SymbolProvider {
+    // Crate absolute paths compile without imports.
+    const symbol = (reference: string): CodeGenerator.Symbol => ({
+      reference,
+      imports: [],
+    });
+    const record = (location: RecordLocation): string =>
+      `${toRustPathPrefix(location.modulePath)}::${getTypeName(location)}`;
+    return {
+      record: (location) => symbol(record(location)),
+      method: (module, method) =>
+        symbol(`${toRustPathPrefix(module.path)}::${getMethodName(method)}()`),
+      variant: (location, variant) =>
+        symbol(
+          `${record(location)}::${getVariantName(location, variant)}${variant.type ? "(_)" : ""}`,
+        ),
+      variantConstructor: (location, variant): CodeGenerator.Symbol => {
+        const name = `${record(location)}::${getVariantName(location, variant)}`;
+        if (!variant.type) {
+          return symbol(name);
+        }
+        return symbol(
+          doesWrapperVariantNeedBoxing(variant.type)
+            ? `${name}(::std::boxed::Box::new({value}))`
+            : `${name}({value})`,
+        );
+      },
+      variantValue: (location, variant): CodeGenerator.Symbol => {
+        if (!variant.type) {
+          throw new TypeError(`${variant.name.text} is a constant variant`);
+        }
+        const name = `${record(location)}::${getVariantName(location, variant)}`;
+        const value = doesWrapperVariantNeedBoxing(variant.type)
+          ? "&**value"
+          : "value";
+        return symbol(
+          `match {value} { ${name}(value) => ${value}, _ => ::std::unreachable!() }`,
+        );
+      },
+    };
   }
 }
 
@@ -288,13 +331,8 @@ class RustSourceFileGenerator {
     this.push(
       `Unknown(${namer.option}<crate::skir_client::UnrecognizedVariant<${typeName}>>),\n`,
     );
-    const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
-      record.record.fields,
-    );
     for (const variant of record.record.fields) {
-      const variantName = convertCase(variant.name.text, "UpperCamel").concat(
-        variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
-      );
+      const variantName = getVariantName(record, variant);
       this.push(commentify(docToCommentText(variant.doc)));
       if (variant.type) {
         const variantType = variant.type!;
@@ -322,9 +360,7 @@ class RustSourceFileGenerator {
       this.push(`pub enum ${typeName}_kind {\n`);
       this.push("Unknown,\n");
       for (const variant of record.record.fields) {
-        const variantName = convertCase(variant.name.text, "UpperCamel").concat(
-          variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
-        );
+        const variantName = getVariantName(record, variant);
         this.push(`${variantName},\n`);
       }
       this.push("}\n\n");
@@ -335,9 +371,7 @@ class RustSourceFileGenerator {
       this.push(`match self {\n`);
       this.push(`${typeName}::Unknown(_) => ${typeName}_kind::Unknown,\n`);
       for (const variant of record.record.fields) {
-        const variantName = convertCase(variant.name.text, "UpperCamel").concat(
-          variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
-        );
+        const variantName = getVariantName(record, variant);
         if (variant.type) {
           this.push(
             `${typeName}::${variantName}(_) => ${typeName}_kind::${variantName},\n`,
@@ -369,9 +403,7 @@ class RustSourceFileGenerator {
     this.push(`${typeName}::Unknown(_) => 0,\n`);
     let kindOrdinal = 1;
     for (const variant of record.record.fields) {
-      const variantName = convertCase(variant.name.text, "UpperCamel").concat(
-        variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
-      );
+      const variantName = getVariantName(record, variant);
       if (variant.type) {
         this.push(`${typeName}::${variantName}(_) => ${kindOrdinal},\n`);
       } else {
@@ -442,9 +474,6 @@ class RustSourceFileGenerator {
         this.push("(*a).finalize();\n");
         this.push("}\n");
       } else {
-        const variantNamesNeedSuffix = doVariantNamesNeedSuffix(
-          record.record.fields,
-        );
         this.push("unsafe {\n");
         this.push(
           `let a: *mut crate::skir_client::internal::EnumAdapter<${typeName}> = ${typeName}::_adapter() as *const _ as *mut _;\n`,
@@ -454,12 +483,7 @@ class RustSourceFileGenerator {
         }
         let kindOrdinal = 1;
         for (const variant of record.record.fields) {
-          const variantName = convertCase(
-            variant.name.text,
-            "UpperCamel",
-          ).concat(
-            variantNamesNeedSuffix ? (variant.type ? "Wrapper" : "Const") : "",
-          );
+          const variantName = getVariantName(record, variant);
           if (variant.type) {
             const serializerExpr = typeSpeller.getSerializerExpression(
               variant.type,
@@ -496,9 +520,7 @@ class RustSourceFileGenerator {
 
   private writeMethod(method: Method): void {
     const { typeSpeller } = this;
-    const rustName = convertCase(method.name.text, "lower_underscore").concat(
-      "_method",
-    );
+    const rustName = getMethodName(method);
     const requestRustType = typeSpeller.getRustType(method.requestType!);
     const responseRustType = typeSpeller.getRustType(method.responseType!);
     const requestSerializerExpr = typeSpeller.getSerializerExpression(
@@ -681,18 +703,6 @@ class RustSourceFileGenerator {
   private readonly namer: Namer;
   private readonly typeSpeller: TypeSpeller;
   private code = "";
-}
-
-function doVariantNamesNeedSuffix(variants: readonly Field[]): boolean {
-  const seenNames = new Set<string>();
-  for (const variant of variants) {
-    const name = convertCase(variant.name.text, "UpperCamel");
-    if (isUpperCasedKeyword(name) || seenNames.has(name)) {
-      return true;
-    }
-    seenNames.add(name);
-  }
-  return false;
 }
 
 function doesWrapperVariantNeedBoxing(type: ResolvedType): boolean {
